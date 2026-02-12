@@ -1,0 +1,8 @@
+.next
+node_modules
+.env
+.env.local
+coverage
+dist
+public/uploads/*
+!public/uploads/.gitkeep

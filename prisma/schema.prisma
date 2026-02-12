@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PartStatus {
+  DESIGNED
+  CUT
+  MACHINED
+  ASSEMBLED
+  VERIFIED
+  DONE
+}
+
+enum PartOwnerRole {
+  PRIMARY
+  COLLABORATOR
+}
+
+enum PartEventType {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  OWNERS_CHANGED
+  PHOTO_ADDED
+  IMPORTED
+}
+
+enum ImportBatchStatus {
+  PREVIEW
+  COMMITTED
+  FAILED
+}
+
+enum ImportRowAction {
+  CREATE
+  UPDATE
+  NO_CHANGE
+  ERROR
+}
+
+model User {
+  id          String      @id @default(cuid())
+  email       String      @unique
+  displayName String
+  avatarUrl   String?
+  createdAt   DateTime    @default(now())
+  owners      PartOwner[]
+  events      PartEvent[]
+  photos      PartPhoto[] @relation("UploadedBy")
+  batches     ImportBatch[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  season    String
+  createdAt DateTime @default(now())
+  parts     Part[]
+  batches   ImportBatch[]
+
+  @@index([season])
+}
+
+model Part {
+  id               String      @id @default(cuid())
+  projectId        String
+  partNumber       String
+  name             String
+  description      String?
+  status           PartStatus  @default(DESIGNED)
+  quantityRequired Int         @default(1)
+  quantityComplete Int         @default(0)
+  priority         Int         @default(2)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  project          Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owners           PartOwner[]
+  photos           PartPhoto[]
+  events           PartEvent[]
+
+  @@unique([projectId, partNumber])
+  @@index([partNumber])
+  @@index([name])
+  @@index([status])
+  @@index([projectId, status])
+}
+
+model PartOwner {
+  id         String        @id @default(cuid())
+  partId     String
+  userId     String
+  role       PartOwnerRole
+  assignedAt DateTime      @default(now())
+  part       Part          @relation(fields: [partId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([partId, userId])
+  @@index([userId, role])
+}
+
+model PartPhoto {
+  id           String    @id @default(cuid())
+  partId        String
+  eventId       String?
+  storageKey    String
+  originalName  String
+  mimeType      String
+  width         Int?
+  height        Int?
+  createdAt     DateTime @default(now())
+  uploadedById  String
+  part          Part      @relation(fields: [partId], references: [id], onDelete: Cascade)
+  event         PartEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  uploadedBy    User      @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([partId, createdAt])
+}
+
+model PartEvent {
+  id          String        @id @default(cuid())
+  partId       String
+  actorUserId  String
+  eventType    PartEventType
+  fromStatus   PartStatus?
+  toStatus     PartStatus?
+  payloadJson  Json?
+  createdAt    DateTime      @default(now())
+  part         Part          @relation(fields: [partId], references: [id], onDelete: Cascade)
+  actor        User          @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+  photos       PartPhoto[]
+
+  @@index([partId, createdAt(sort: Desc)])
+}
+
+model ImportBatch {
+  id          String            @id @default(cuid())
+  projectId   String
+  sourceType  String
+  fileName    String
+  startedById String
+  status      ImportBatchStatus @default(PREVIEW)
+  summaryJson Json?
+  createdAt   DateTime          @default(now())
+  completedAt DateTime?
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  startedBy   User              @relation(fields: [startedById], references: [id], onDelete: Cascade)
+  rows        ImportRow[]
+}
+
+model ImportRow {
+  id             String         @id @default(cuid())
+  batchId        String
+  rowIndex       Int
+  externalKey    String?
+  partNumber     String?
+  name           String?
+  quantityNeeded Int?
+  action         ImportRowAction
+  errorMessage   String?
+  rawJson        Json?
+  batch          ImportBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, rowIndex])
+}
+
+model MutationToken {
+  id           String   @id @default(cuid())
+  token        String
+  scope        String
+  responseJson Json?
+  createdAt    DateTime @default(now())
+
+  @@unique([token, scope])
+  @@index([scope, createdAt])
+}

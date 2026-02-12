@@ -1,0 +1,78 @@
+import { PartEventType, PartOwnerRole } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { jsonError, parseJson, requireUser } from "@/lib/api";
+import { prisma } from "@/lib/db";
+
+const schema = z.object({
+  primaryOwnerId: z.string().nullable(),
+  collaboratorIds: z.array(z.string()).default([])
+});
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const userResult = requireUser(request);
+  if (userResult instanceof NextResponse) {
+    return userResult;
+  }
+
+  const parsed = await parseJson(request, schema);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const { id } = await params;
+  const part = await prisma.part.findUnique({ where: { id }, select: { id: true } });
+  if (!part) {
+    return jsonError("Part not found.", 404);
+  }
+
+  const collaboratorIds = [...new Set(parsed.data.collaboratorIds)];
+
+  if (
+    parsed.data.primaryOwnerId &&
+    collaboratorIds.includes(parsed.data.primaryOwnerId)
+  ) {
+    return jsonError("Primary owner cannot also be a collaborator.", 400);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.partOwner.deleteMany({ where: { partId: id } });
+
+    const createData = [];
+    if (parsed.data.primaryOwnerId) {
+      createData.push({
+        partId: id,
+        userId: parsed.data.primaryOwnerId,
+        role: PartOwnerRole.PRIMARY
+      });
+    }
+    for (const collaboratorId of collaboratorIds) {
+      createData.push({
+        partId: id,
+        userId: collaboratorId,
+        role: PartOwnerRole.COLLABORATOR
+      });
+    }
+
+    if (createData.length > 0) {
+      await tx.partOwner.createMany({ data: createData });
+    }
+
+    await tx.partEvent.create({
+      data: {
+        partId: id,
+        actorUserId: userResult,
+        eventType: PartEventType.OWNERS_CHANGED,
+        payloadJson: {
+          primaryOwnerId: parsed.data.primaryOwnerId,
+          collaboratorIds
+        }
+      }
+    });
+  });
+
+  return NextResponse.json({ ok: true });
+}
