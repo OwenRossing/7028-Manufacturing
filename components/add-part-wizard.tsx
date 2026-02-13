@@ -7,7 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { isValidPartNumber, partNumberHint } from "@/lib/part-number";
+import {
+  buildPartNumber,
+  defaultSeasonYear,
+  defaultTeamNumber,
+  isValidPartNumber,
+  partNumberHint
+} from "@/lib/part-number";
 
 type ProjectOption = {
   id: string;
@@ -21,7 +27,10 @@ type UserOption = {
 
 type WizardState = {
   projectId: string;
-  partNumber: string;
+  partNumberTeam: string;
+  partNumberYear: string;
+  partNumberRobot: string;
+  partNumberCode: string;
   name: string;
   description: string;
   quantityRequired: number;
@@ -44,7 +53,10 @@ export function AddPartWizard({
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<WizardState>({
     projectId: projects[0]?.id ?? "",
-    partNumber: "",
+    partNumberTeam: defaultTeamNumber(),
+    partNumberYear: defaultSeasonYear(),
+    partNumberRobot: "1",
+    partNumberCode: "",
     name: "",
     description: "",
     quantityRequired: 1,
@@ -54,7 +66,16 @@ export function AddPartWizard({
     collaboratorIds: []
   });
 
-  const partNumberSegments = useMemo(() => state.partNumber.split("-"), [state.partNumber]);
+  const partNumber = useMemo(
+    () =>
+      buildPartNumber({
+        team: state.partNumberTeam,
+        year: state.partNumberYear,
+        robot: state.partNumberRobot,
+        partCode: state.partNumberCode
+      }),
+    [state.partNumberCode, state.partNumberRobot, state.partNumberTeam, state.partNumberYear]
+  );
 
   const createPartMutation = useMutation({
     mutationFn: async () => {
@@ -63,6 +84,7 @@ export function AddPartWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...state,
+          partNumber,
           primaryOwnerId: state.primaryOwnerId || undefined
         })
       });
@@ -88,7 +110,7 @@ export function AddPartWizard({
   function next() {
     setError(null);
     if (step === 1) {
-      if (!state.projectId || !state.name.trim() || !isValidPartNumber(state.partNumber)) {
+      if (!state.projectId || !state.name.trim() || !isValidPartNumber(partNumber)) {
         setError(`Complete required fields. ${partNumberHint()}`);
         return;
       }
@@ -139,18 +161,71 @@ export function AddPartWizard({
             ))}
           </Select>
           <label className="block text-sm text-steel-300">Part number</label>
-          <Input
-            value={state.partNumber}
-            placeholder="7028-2026-R1-1001"
-            onChange={(event) => setState((prev) => ({ ...prev, partNumber: event.target.value }))}
-          />
-          <p className="text-xs text-steel-300">{partNumberHint()}</p>
-          <div className="flex gap-2 text-xs text-steel-300">
-            <span>Team: {partNumberSegments[0] ?? "-"}</span>
-            <span>Year: {partNumberSegments[1] ?? "-"}</span>
-            <span>Robot: {partNumberSegments[2] ?? "-"}</span>
-            <span>Code: {partNumberSegments[3] ?? "-"}</span>
+          <div className="grid gap-2 md:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-xs text-steel-300">Team</label>
+              <Input
+                value={state.partNumberTeam}
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="7028"
+                onChange={(event) =>
+                  setState((prev) => ({
+                    ...prev,
+                    partNumberTeam: event.target.value.replace(/\D/g, "").slice(0, 4)
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-steel-300">Year</label>
+              <Input
+                value={state.partNumberYear}
+                inputMode="numeric"
+                maxLength={4}
+                placeholder={defaultSeasonYear()}
+                onChange={(event) =>
+                  setState((prev) => ({
+                    ...prev,
+                    partNumberYear: event.target.value.replace(/\D/g, "").slice(0, 4)
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-steel-300">Robot #</label>
+              <Input
+                value={state.partNumberRobot}
+                inputMode="numeric"
+                placeholder="1"
+                onChange={(event) =>
+                  setState((prev) => ({
+                    ...prev,
+                    partNumberRobot: event.target.value.replace(/\D/g, "")
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-steel-300">Part Code</label>
+              <Input
+                value={state.partNumberCode}
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="1001"
+                onChange={(event) =>
+                  setState((prev) => ({
+                    ...prev,
+                    partNumberCode: event.target.value.replace(/\D/g, "").slice(0, 4)
+                  }))
+                }
+              />
+            </div>
           </div>
+          <p className="text-xs text-steel-300">{partNumberHint()}</p>
+          <p className="text-xs text-steel-300">
+            Auto-built: <span className="font-semibold text-white">{partNumber}</span>
+          </p>
           <label className="block text-sm text-steel-300">Part name</label>
           <Input
             value={state.name}
@@ -243,7 +318,7 @@ export function AddPartWizard({
           </select>
           <div className="rounded-md border border-steel-700 bg-steel-850 p-3 text-sm text-steel-300">
             <p className="font-semibold text-white">{state.name || "Unnamed part"}</p>
-            <p>{state.partNumber || "No part number"}</p>
+            <p>{isValidPartNumber(partNumber) ? partNumber : "No part number"}</p>
             <p>
               Qty {state.quantityComplete}/{state.quantityRequired}
             </p>
