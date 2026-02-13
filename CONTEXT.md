@@ -3,54 +3,52 @@
 ## TL;DR
 - Project: FRC manufactured parts tracker demo.
 - Stack: Next.js App Router + Prisma + Postgres + Tailwind + TanStack Query.
-- Primary UX direction: Amazon-like top shell, search-first explorer, fast-feeling actions.
-- Current branch: `main` (pushed previously), this file is for quick agent onboarding.
+- Current primary UX: search-first explorer, quick status/owner/photo actions, manual part wizard + BOM preview/commit.
+- Part number UX was updated: wizard now uses 4 fields (team/year/robot/part code) and auto-builds canonical part number.
 
 ## Product Intent
 - Track fabricated robot parts per project and per user.
-- Primary flow: search/find parts quickly, update status, assign owners, attach photo evidence.
+- Main loop: find part fast, update status, set ownership, attach photo evidence.
 - Status lifecycle: `DESIGNED -> CUT -> MACHINED -> ASSEMBLED -> VERIFIED -> DONE`.
 - Done gate: cannot set `DONE` without at least one photo.
-- Part number format is strict: `TEAM-YEAR-ROBOT-PARTCODE` (e.g. `7028-2026-R1-1001`).
 
 ## Architecture Snapshot
 - UI routes in `app/`:
   - `/` explorer (`components/parts-explorer.tsx`)
   - `/parts/new` wizard (`components/add-part-wizard.tsx`)
   - `/parts/[id]` detail (`components/part-detail-client.tsx`)
-  - `/import`, `/projects`, plus prototype routes.
+  - `/import`, `/projects`, plus prototype routes
 - API routes in `app/api/**`:
-  - auth (`demo-login`), parts CRUD/mutations, imports, projects, users.
+  - demo auth, parts CRUD/mutations, import preview/commit, projects, users
 - Data:
   - Prisma schema: `prisma/schema.prisma`
   - Seed: `prisma/seed.ts`
-  - Utilities: `lib/*` (auth, status, part-number, idempotency, providers)
+  - Utilities in `lib/*` (auth, status, part-number, idempotency, providers)
 
-## Runbook
-- Full local app+db: `docker compose up --build`
-- Fast UI dev: `npm run dev:all`
-  - starts DB container, pushes schema, seeds, runs Next dev
-- Build check: `npm run build`
+## Recent Changes
+- Part number entry in add-part wizard changed from one strict input to 4 segmented inputs.
+- Team and year are prefilled by default.
+- Wizard constructs and validates canonical format before submit.
+- Helper utilities added in `lib/part-number.ts`:
+  - `defaultTeamNumber()`
+  - `defaultSeasonYear()`
+  - `buildPartNumber(...)`
 
-## Important Environment Notes
-- For local npm commands, `DATABASE_URL` should use `localhost`, not `db`:
+## Environment Notes (WSL)
+- For local npm commands, use localhost DB URL:
   - `postgresql://postgres:postgres@localhost:5432/frc_parts?schema=public`
-- `db` hostname only works inside Docker network (container-to-container).
+- `db` host is only for container-to-container networking.
+- Docker CLI may not be integrated directly in WSL; using Docker Desktop via `docker.exe compose ...` works.
+- GitHub SSH is configured in WSL for this machine.
 
-## Recent UX Decisions
-- Prefer single-action workflows over multi-step controls.
-- Part detail polish:
-  - Primary status action: “Advance to Next”
-  - Manual status selector remains as backup.
-  - Photo upload uses one-button flow (“Add Photo”) then auto-upload on file pick.
+## Operational Runbook
+- Start DB: `docker.exe compose up -d db` (or `docker compose up -d db` if integrated)
+- Push schema: `npm run db:push`
+- Seed: `npm run prisma:seed`
+- Run app: `npm run dev`
+- Build gate: `npm run build`
 
-## Open Edges / Next Priority
-- Continue visual polish and spacing consistency.
-- Simplify ownership UI complexity where possible.
-- Compare project drawer prototypes and choose final direction.
-- Add tests (currently no dedicated test suite; build/typecheck is primary gate).
+## Known Edges
+- Seed part number (`7028-DRIVE-PLATE-A`) does not match currently enforced part number regex.
+- No dedicated automated test suite yet; build/typecheck + manual critical-path checks are current gate.
 
-## Agent Guidance
-- Read `AGENTS.md` first for contributor conventions.
-- Preserve current UX direction: centralized shell, search-first, low-friction interactions.
-- Avoid reintroducing old multi-step form patterns where single-action controls work.

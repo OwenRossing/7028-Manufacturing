@@ -48,3 +48,4 @@
 ## Security & Configuration Tips
 - Copy `.env.example` to `.env` and keep secrets out of git.
 - For local npm commands, use `DATABASE_URL` with `localhost`; `db` hostname is for container-to-container networking.
+- On WSL setups without Docker CLI integration, use Docker Desktop from WSL via `docker.exe compose ...`.
