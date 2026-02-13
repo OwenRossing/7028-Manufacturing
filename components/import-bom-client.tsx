@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 
 type ProjectOption = {
   id: string;
@@ -37,6 +40,7 @@ export function ImportBomClient({
     setError(null);
     const formData = new FormData(event.currentTarget);
     formData.set("projectId", projectId);
+
     const response = await fetch("/api/imports/bom", {
       method: "POST",
       body: formData
@@ -44,6 +48,7 @@ export function ImportBomClient({
     const data = (await response.json().catch(() => null)) as
       | { error?: string; batchId?: string; rows?: PreviewRow[] }
       | null;
+
     if (!response.ok || !data?.batchId) {
       setError(data?.error ?? "Import preview failed.");
       setLoading(false);
@@ -72,63 +77,71 @@ export function ImportBomClient({
   }
 
   return (
-    <section className="stack">
-      <form className="panel stack" onSubmit={previewImport}>
-        <h1 style={{ margin: 0 }}>Import Onshape BOM</h1>
-        <p className="muted" style={{ margin: 0 }}>
-          Upload CSV export and preview creates/updates before commit.
-        </p>
-        <label className="stack">
-          Project
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <input type="file" name="file" accept=".csv,text/csv" required />
-        <button type="submit" disabled={loading}>
-          {loading ? "Parsing..." : "Preview Import"}
-        </button>
-      </form>
+    <section className="space-y-4">
+      <Card className="space-y-3">
+        <h1 className="text-2xl font-bold text-white">Import Onshape BOM</h1>
+        <p className="text-sm text-steel-300">Upload CSV export and preview changes before commit.</p>
+        <form className="space-y-3" onSubmit={previewImport}>
+          <div>
+            <label className="mb-1 block text-sm text-steel-300">Project</label>
+            <Select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <input
+            type="file"
+            name="file"
+            accept=".csv,text/csv"
+            required
+            className="block w-full rounded-md border border-steel-700 bg-steel-850 p-2 text-sm text-white"
+          />
+          <Button type="submit" disabled={loading}>
+            {loading ? "Parsing..." : "Preview Import"}
+          </Button>
+        </form>
+      </Card>
 
       {batchId ? (
-        <div className="panel stack">
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0 }}>Preview Rows</h3>
-            <button onClick={commitImport}>Commit Import</button>
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Preview Rows</h2>
+            <Button onClick={commitImport}>Commit Import</Button>
           </div>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Row</th>
-                <th>Part #</th>
-                <th>Name</th>
-                <th>Qty</th>
-                <th>Action</th>
-                <th>Error</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.rowIndex}>
-                  <td>{row.rowIndex}</td>
-                  <td>{row.partNumber ?? "-"}</td>
-                  <td>{row.name ?? "-"}</td>
-                  <td>{row.quantityNeeded ?? "-"}</td>
-                  <td>{row.action}</td>
-                  <td>{row.errorMessage ?? "-"}</td>
+          <div className="overflow-x-auto">
+            <table className="table text-sm">
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>Part #</th>
+                  <th>Name</th>
+                  <th>Qty</th>
+                  <th>Action</th>
+                  <th>Error</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.rowIndex}>
+                    <td>{row.rowIndex}</td>
+                    <td>{row.partNumber ?? "-"}</td>
+                    <td>{row.name ?? "-"}</td>
+                    <td>{row.quantityNeeded ?? "-"}</td>
+                    <td>{row.action}</td>
+                    <td>{row.errorMessage ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : null}
 
-      {message ? <p style={{ color: "var(--success)", margin: 0 }}>{message}</p> : null}
-      {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
+      {message ? <p className="text-sm text-green-400">{message}</p> : null}
+      {error ? <p className="text-sm text-red-400">{error}</p> : null}
     </section>
   );
 }

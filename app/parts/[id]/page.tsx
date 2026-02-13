@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PartDetailClient } from "@/components/part-detail-client";
 import { statusLabel } from "@/lib/status";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export default async function PartDetailPage({
   params
@@ -39,21 +41,21 @@ export default async function PartDetailPage({
     .map((owner) => owner.userId);
 
   return (
-    <section className="stack">
-      <div className="panel stack">
-        <h1 style={{ margin: 0 }}>{part.name}</h1>
-        <div className="row" style={{ flexWrap: "wrap" }}>
-          <span className="chip">{part.partNumber}</span>
-          <span className="chip">{statusLabel(part.status)}</span>
-          <span className="chip">
+    <section className="space-y-4">
+      <Card className="space-y-2">
+        <h1 className="text-2xl font-bold text-white">{part.name}</h1>
+        <div className="flex flex-wrap gap-2">
+          <Badge>{part.partNumber}</Badge>
+          <Badge>{statusLabel(part.status)}</Badge>
+          <Badge>
             Progress {part.quantityComplete}/{part.quantityRequired}
-          </span>
-          <span className="chip">{part.project.name}</span>
+          </Badge>
+          <Badge>{part.project.name}</Badge>
         </div>
-        <p className="muted" style={{ margin: 0 }}>
+        <p className="text-sm text-steel-300">
           {part.description || "No description yet."}
         </p>
-      </div>
+      </Card>
 
       <PartDetailClient
         part={{
@@ -65,24 +67,24 @@ export default async function PartDetailPage({
         users={users}
       />
 
-      <div className="panel stack">
-        <h3 style={{ margin: 0 }}>Recent Activity</h3>
-        <div className="stack">
+      <Card className="space-y-2">
+        <h3 className="text-lg font-semibold text-white">Recent Activity</h3>
+        <div className="space-y-2">
           {part.events.map((event) => (
-            <div key={event.id} className="row" style={{ justifyContent: "space-between" }}>
+            <div key={event.id} className="flex items-center justify-between gap-2">
               <span>
                 <strong>{event.eventType}</strong> by {event.actor.displayName}
               </span>
-              <span className="muted">{event.createdAt.toLocaleString()}</span>
+              <span className="text-sm text-steel-300">{event.createdAt.toLocaleString()}</span>
             </div>
           ))}
-          {part.events.length === 0 ? <p className="muted">No events yet.</p> : null}
+          {part.events.length === 0 ? <p className="text-sm text-steel-300">No events yet.</p> : null}
         </div>
-      </div>
+      </Card>
 
-      <div className="panel stack">
-        <h3 style={{ margin: 0 }}>Photos</h3>
-        <div className="row" style={{ flexWrap: "wrap" }}>
+      <Card className="space-y-2">
+        <h3 className="text-lg font-semibold text-white">Photos</h3>
+        <div className="flex flex-wrap gap-3">
           {part.photos.map((photo) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -91,12 +93,12 @@ export default async function PartDetailPage({
               alt={photo.originalName}
               width={120}
               height={120}
-              style={{ objectFit: "cover", borderRadius: 8, border: "1px solid var(--border)" }}
+              className="rounded-md border border-steel-700 object-cover"
             />
           ))}
-          {part.photos.length === 0 ? <p className="muted">No photos uploaded yet.</p> : null}
+          {part.photos.length === 0 ? <p className="text-sm text-steel-300">No photos uploaded yet.</p> : null}
         </div>
-      </div>
+      </Card>
     </section>
   );
 }

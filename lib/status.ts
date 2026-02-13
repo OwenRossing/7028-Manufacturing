@@ -9,6 +9,14 @@ const ORDER: PartStatus[] = [
   "DONE"
 ];
 
+export function nextStatus(current: PartStatus): PartStatus | null {
+  const index = ORDER.indexOf(current);
+  if (index < 0 || index === ORDER.length - 1) {
+    return null;
+  }
+  return ORDER[index + 1];
+}
+
 export function canTransition(from: PartStatus, to: PartStatus): boolean {
   if (from === to) {
     return true;

@@ -67,9 +67,20 @@ export async function POST(
     }
   });
 
+  const updatedPart = await prisma.part.findUnique({
+    where: { id },
+    include: {
+      owners: { include: { user: true }, orderBy: { role: "asc" } },
+      photos: { orderBy: { createdAt: "desc" }, take: 1 }
+    }
+  });
+
   return NextResponse.json({
-    id: photo.id,
-    storageKey: photo.storageKey,
-    publicPath: saved.publicPath
+    photo: {
+      id: photo.id,
+      storageKey: photo.storageKey,
+      publicPath: saved.publicPath
+    },
+    part: updatedPart
   });
 }

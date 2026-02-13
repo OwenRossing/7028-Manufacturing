@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +16,7 @@ export default function LoginPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
+
     const response = await fetch("/api/auth/demo-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -24,26 +28,24 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+
     router.replace("/");
     router.refresh();
   }
 
   return (
-    <section className="panel stack" style={{ maxWidth: 480, margin: "40px auto" }}>
-      <h1 style={{ margin: 0 }}>Demo Sign In</h1>
-      <p className="muted" style={{ margin: 0 }}>
-        Use a seeded team account to access the tracker.
-      </p>
-      <form className="stack" onSubmit={onSubmit}>
-        <label className="stack">
-          Email
-          <input value={email} onChange={(event) => setEmail(event.target.value)} />
-        </label>
-        <button type="submit" disabled={loading}>
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
-        {error ? <p style={{ color: "var(--danger)", margin: 0 }}>{error}</p> : null}
-      </form>
-    </section>
+    <div className="mx-auto mt-14 max-w-md">
+      <Card className="space-y-4">
+        <h1 className="text-2xl font-bold text-white">Sign In</h1>
+        <p className="text-sm text-steel-300">Use a seeded demo account.</p>
+        <form className="space-y-3" onSubmit={onSubmit}>
+          <Input value={email} onChange={(event) => setEmail(event.target.value)} />
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Signing in..." : "Sign In"}
+          </Button>
+          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        </form>
+      </Card>
+    </div>
   );
 }

@@ -38,7 +38,7 @@ export async function POST(
     return jsonError("Primary owner cannot also be a collaborator.", 400);
   }
 
-  await prisma.$transaction(async (tx) => {
+  const updatedPart = await prisma.$transaction(async (tx) => {
     await tx.partOwner.deleteMany({ where: { partId: id } });
 
     const createData = [];
@@ -72,7 +72,15 @@ export async function POST(
         }
       }
     });
+
+    return tx.part.findUnique({
+      where: { id },
+      include: {
+        owners: { include: { user: true }, orderBy: { role: "asc" } },
+        photos: { orderBy: { createdAt: "desc" }, take: 1 }
+      }
+    });
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(updatedPart);
 }

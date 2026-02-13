@@ -3,9 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
+import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
+  partNumber: z.string().regex(PART_NUMBER_REGEX, partNumberHint()).optional(),
   description: z.string().nullable().optional(),
   quantityRequired: z.number().int().min(1).optional(),
   quantityComplete: z.number().int().min(0).optional(),
@@ -56,7 +58,11 @@ export async function PATCH(
 
   const updated = await prisma.part.update({
     where: { id },
-    data: parsed.data
+    data: parsed.data,
+    include: {
+      owners: { include: { user: true }, orderBy: { role: "asc" } },
+      photos: { orderBy: { createdAt: "desc" }, take: 1 }
+    }
   });
 
   await prisma.partEvent.create({

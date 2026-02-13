@@ -50,7 +50,7 @@ export async function POST(
     return jsonError("At least one photo is required before setting status to DONE.", 400);
   }
 
-  const updated = await prisma.part.update({
+  await prisma.part.update({
     where: { id },
     data: { status: parsed.data.toStatus }
   });
@@ -66,10 +66,16 @@ export async function POST(
     }
   });
 
-  const responsePayload = {
-    id: updated.id,
-    status: updated.status
-  };
+  const responsePayload = await prisma.part.findUnique({
+    where: { id },
+    include: {
+      owners: { include: { user: true }, orderBy: { role: "asc" } },
+      photos: { orderBy: { createdAt: "desc" }, take: 1 }
+    }
+  });
+  if (!responsePayload) {
+    return jsonError("Part not found after update.", 404);
+  }
   await storeIdempotentResponse(token, scope, responsePayload);
   return NextResponse.json(responsePayload);
 }

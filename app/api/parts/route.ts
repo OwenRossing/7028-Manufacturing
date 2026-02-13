@@ -1,18 +1,28 @@
-import { PartEventType, PartOwnerRole, PartStatus } from "@prisma/client";
+import { Prisma, PartEventType, PartOwnerRole, PartStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
+import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
 
 const createSchema = z.object({
   projectId: z.string().min(1),
-  partNumber: z.string().min(1),
-  name: z.string().min(1),
+  partNumber: z.string().regex(PART_NUMBER_REGEX, partNumberHint()),
+  name: z.string().min(2),
   description: z.string().optional(),
   quantityRequired: z.number().int().min(1).default(1),
+  quantityComplete: z.number().int().min(0).default(0),
   priority: z.number().int().min(1).max(5).default(2),
-  primaryOwnerId: z.string().optional()
+  primaryOwnerId: z.string().optional(),
+  collaboratorIds: z.array(z.string()).default([])
 });
+
+function statusValues(searchParams: URLSearchParams): PartStatus[] {
+  const values = searchParams.getAll("status");
+  return values.filter((value): value is PartStatus =>
+    Object.values(PartStatus).includes(value as PartStatus)
+  );
+}
 
 export async function GET(request: NextRequest) {
   const userResult = requireUser(request);
@@ -21,44 +31,50 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = request.nextUrl;
-  const query = searchParams.get("query")?.trim();
-  const rawStatus = searchParams.get("status");
-  const status =
-    rawStatus && Object.values(PartStatus).includes(rawStatus as PartStatus)
-      ? (rawStatus as PartStatus)
+  const q = searchParams.get("q")?.trim();
+  const qAsStatus =
+    q && Object.values(PartStatus).includes(q.toUpperCase() as PartStatus)
+      ? (q.toUpperCase() as PartStatus)
       : null;
+  const statuses = statusValues(searchParams);
   const projectId = searchParams.get("projectId");
   const ownerId = searchParams.get("ownerId");
-  const sort = searchParams.get("sort") ?? "updatedAt_desc";
+  const sort = searchParams.get("sort") ?? "recent";
   const page = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const pageSize = Math.min(Number.parseInt(searchParams.get("pageSize") ?? "25", 10), 100);
 
-  const where = {
-    ...(query
+  const where: Prisma.PartWhereInput = {
+    ...(q
       ? {
           OR: [
-            { name: { contains: query, mode: "insensitive" as const } },
-            { partNumber: { contains: query, mode: "insensitive" as const } }
+            { name: { contains: q, mode: "insensitive" } },
+            { partNumber: { contains: q, mode: "insensitive" } },
+            ...(qAsStatus ? [{ status: { equals: qAsStatus } }] : []),
+            {
+              owners: {
+                some: {
+                  user: {
+                    displayName: { contains: q, mode: "insensitive" }
+                  }
+                }
+              }
+            }
           ]
         }
       : {}),
-    ...(status ? { status } : {}),
+    ...(statuses.length ? { status: { in: statuses } } : {}),
     ...(projectId ? { projectId } : {}),
-    ...(ownerId
-      ? {
-          owners: {
-            some: { userId: ownerId }
-          }
-        }
-      : {})
+    ...(ownerId ? { owners: { some: { userId: ownerId } } } : {})
   };
 
-  const orderBy =
-    sort === "name_asc"
-      ? { name: "asc" as const }
-      : sort === "name_desc"
-      ? { name: "desc" as const }
-      : { updatedAt: "desc" as const };
+  const orderBy: Prisma.PartOrderByWithRelationInput[] =
+    sort === "name"
+      ? [{ name: "asc" }]
+      : sort === "status"
+      ? [{ status: "asc" }, { updatedAt: "desc" }]
+      : sort === "progress"
+      ? [{ quantityComplete: "asc" }, { updatedAt: "desc" }]
+      : [{ updatedAt: "desc" }];
 
   const [parts, total] = await Promise.all([
     prisma.part.findMany({
@@ -93,6 +109,10 @@ export async function POST(request: NextRequest) {
     return parsed.response;
   }
 
+  const collaboratorIds = [...new Set(parsed.data.collaboratorIds)].filter(
+    (id) => id !== parsed.data.primaryOwnerId
+  );
+
   const created = await prisma.part.create({
     data: {
       projectId: parsed.data.projectId,
@@ -101,26 +121,37 @@ export async function POST(request: NextRequest) {
       description: parsed.data.description,
       status: PartStatus.DESIGNED,
       quantityRequired: parsed.data.quantityRequired,
+      quantityComplete: parsed.data.quantityComplete,
       priority: parsed.data.priority,
-      owners: parsed.data.primaryOwnerId
-        ? {
-            create: {
-              userId: parsed.data.primaryOwnerId,
-              role: PartOwnerRole.PRIMARY
+      owners:
+        parsed.data.primaryOwnerId || collaboratorIds.length
+          ? {
+              create: [
+                ...(parsed.data.primaryOwnerId
+                  ? [{ userId: parsed.data.primaryOwnerId, role: PartOwnerRole.PRIMARY }]
+                  : []),
+                ...collaboratorIds.map((userId) => ({
+                  userId,
+                  role: PartOwnerRole.COLLABORATOR
+                }))
+              ]
             }
-          }
-        : undefined,
+          : undefined,
       events: {
         create: {
           actorUserId: userResult,
           eventType: PartEventType.CREATED,
           payloadJson: {
-            source: "manual"
+            source: "manual-wizard"
           }
         }
       }
+    },
+    include: {
+      owners: { include: { user: true }, orderBy: { role: "asc" } },
+      photos: { orderBy: { createdAt: "desc" }, take: 1 }
     }
   });
 
-  return NextResponse.json({ id: created.id }, { status: 201 });
+  return NextResponse.json(created, { status: 201 });
 }

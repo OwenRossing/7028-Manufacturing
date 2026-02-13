@@ -36,6 +36,38 @@ docker compose up --build
    - `alex@team7028.org`
    - `riley@team7028.org`
 
+## Faster UI Development on Windows
+
+For faster hot reload during UI work, run:
+
+```bash
+npm run dev:all
+```
+
+This runs:
+
+- `docker compose up -d db`
+- `npm run db:push`
+- `npm run prisma:seed`
+- `npm run dev`
+
+Manual equivalent:
+
+1. Start only DB with Docker:
+
+```bash
+docker compose up db
+```
+
+2. In another terminal, run app locally:
+
+```bash
+npm install
+npm run db:push
+npm run prisma:seed
+npm run dev
+```
+
 The container startup command automatically runs:
 
 - `npm install`
