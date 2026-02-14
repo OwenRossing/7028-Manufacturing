@@ -64,6 +64,7 @@ export default async function PartDetailPage({
           primaryOwnerId: primaryOwner?.userId ?? null,
           collaboratorIds
         }}
+        hasPhoto={part.photos.length > 0}
         users={users}
       />
 

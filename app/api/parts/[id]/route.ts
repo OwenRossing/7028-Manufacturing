@@ -76,3 +76,22 @@ export async function PATCH(
 
   return NextResponse.json(updated);
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const userResult = requireUser(request);
+  if (userResult instanceof NextResponse) {
+    return userResult;
+  }
+
+  const { id } = await params;
+  const existing = await prisma.part.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) {
+    return jsonError("Part not found.", 404);
+  }
+
+  await prisma.part.delete({ where: { id } });
+  return NextResponse.json({ success: true });
+}

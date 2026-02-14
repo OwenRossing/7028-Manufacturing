@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -19,6 +19,15 @@ type PreviewRow = {
   errorMessage: string | null;
 };
 
+type ImportSummary = {
+  total: number;
+  create: number;
+  update: number;
+  noChange: number;
+  error: number;
+  filteredOut: number;
+};
+
 export function ImportBomClient({
   projects,
   defaultProjectId
@@ -29,9 +38,12 @@ export function ImportBomClient({
   const [projectId, setProjectId] = useState(defaultProjectId ?? projects[0]?.id ?? "");
   const [batchId, setBatchId] = useState<string | null>(null);
   const [rows, setRows] = useState<PreviewRow[]>([]);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function previewImport(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,7 +58,7 @@ export function ImportBomClient({
       body: formData
     });
     const data = (await response.json().catch(() => null)) as
-      | { error?: string; batchId?: string; rows?: PreviewRow[] }
+      | { error?: string; batchId?: string; rows?: PreviewRow[]; summary?: ImportSummary }
       | null;
 
     if (!response.ok || !data?.batchId) {
@@ -56,6 +68,7 @@ export function ImportBomClient({
     }
     setBatchId(data.batchId);
     setRows(data.rows ?? []);
+    setSummary(data.summary ?? null);
     setMessage("Preview generated.");
     setLoading(false);
   }
@@ -92,13 +105,13 @@ export function ImportBomClient({
               ))}
             </Select>
           </div>
-          <input
-            type="file"
-            name="file"
-            accept=".csv,text/csv"
-            required
-            className="block w-full rounded-md border border-steel-700 bg-steel-850 p-2 text-sm text-white"
-          />
+          <input ref={fileInputRef} type="file" name="file" accept=".csv,text/csv" required className="hidden" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? null)} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+              Upload CSV File
+            </Button>
+            <span className="text-sm text-steel-300">{fileName ?? "No file selected yet."}</span>
+          </div>
           <Button type="submit" disabled={loading}>
             {loading ? "Parsing..." : "Preview Import"}
           </Button>
@@ -111,6 +124,12 @@ export function ImportBomClient({
             <h2 className="text-lg font-semibold text-white">Preview Rows</h2>
             <Button onClick={commitImport}>Commit Import</Button>
           </div>
+          {summary ? (
+            <p className="text-sm text-steel-300">
+              {summary.total} rows after filtering. Create: {summary.create}, Update: {summary.update}, No change:{" "}
+              {summary.noChange}, Errors: {summary.error}, Filtered out: {summary.filteredOut}.
+            </p>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="table text-sm">
               <thead>

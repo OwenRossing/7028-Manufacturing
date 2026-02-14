@@ -33,8 +33,8 @@ type WizardState = {
   partNumberCode: string;
   name: string;
   description: string;
-  quantityRequired: number;
-  quantityComplete: number;
+  quantityRequired: string;
+  quantityComplete: string;
   priority: number;
   primaryOwnerId: string;
   collaboratorIds: string[];
@@ -49,6 +49,7 @@ export function AddPartWizard({
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const [mode, setMode] = useState<"choose" | "manual">("choose");
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<WizardState>({
@@ -59,8 +60,8 @@ export function AddPartWizard({
     partNumberCode: "",
     name: "",
     description: "",
-    quantityRequired: 1,
-    quantityComplete: 0,
+    quantityRequired: "1",
+    quantityComplete: "0",
     priority: 2,
     primaryOwnerId: "",
     collaboratorIds: []
@@ -84,6 +85,8 @@ export function AddPartWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...state,
+          quantityRequired: Number.parseInt(state.quantityRequired, 10) || 1,
+          quantityComplete: Number.parseInt(state.quantityComplete, 10) || 0,
           partNumber,
           primaryOwnerId: state.primaryOwnerId || undefined
         })
@@ -109,9 +112,18 @@ export function AddPartWizard({
 
   function next() {
     setError(null);
+    if (mode !== "manual") return;
     if (step === 1) {
       if (!state.projectId || !state.name.trim() || !isValidPartNumber(partNumber)) {
         setError(`Complete required fields. ${partNumberHint()}`);
+        return;
+      }
+    }
+    if (step === 2) {
+      const quantityRequired = Number.parseInt(state.quantityRequired, 10);
+      const quantityComplete = Number.parseInt(state.quantityComplete, 10);
+      if (Number.isNaN(quantityRequired) || quantityRequired < 1 || Number.isNaN(quantityComplete) || quantityComplete < 0) {
+        setError("Set valid quantities before continuing.");
         return;
       }
     }
@@ -122,6 +134,10 @@ export function AddPartWizard({
 
   function back() {
     setError(null);
+    if (mode === "manual" && step === 1) {
+      setMode("choose");
+      return;
+    }
     if (step > 1) {
       setStep((prev) => prev - 1);
     }
@@ -131,22 +147,69 @@ export function AddPartWizard({
     <section className="space-y-4">
       <Card className="space-y-2">
         <h1 className="text-2xl font-bold text-white">Add Part Wizard</h1>
-        <p className="text-sm text-steel-300">
-          Manual-first workflow, designed so Onshape import can prefill this flow later.
-        </p>
-        <div className="flex gap-2 text-xs">
-          {[1, 2, 3].map((value) => (
-            <span
-              key={value}
-              className={`rounded-full px-2 py-1 ${value === step ? "bg-brand-500 text-black" : "bg-steel-800 text-steel-300"}`}
-            >
-              Step {value}
-            </span>
-          ))}
-        </div>
+        <p className="text-sm text-steel-300">Start with BOM upload or continue with manual part entry.</p>
+        {mode === "manual" ? (
+          <div className="flex gap-2 text-xs">
+            {[1, 2, 3].map((value) => (
+              <span
+                key={value}
+                className={`rounded-full px-2 py-1 ${value === step ? "bg-brand-500 text-black" : "bg-steel-800 text-steel-300"}`}
+              >
+                Step {value}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </Card>
 
-      {step === 1 ? (
+      {mode === "choose" ? (
+        <Card className="space-y-4">
+          <h2 className="text-lg font-semibold text-white">Do you already have a BOM to upload?</h2>
+          {!projects.length ? (
+            <p className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
+              Create a project first in Settings before adding or importing parts.
+            </p>
+          ) : null}
+          <div>
+            <label className="mb-1 block text-sm text-steel-300">Project</label>
+            <Select
+              value={state.projectId}
+              onChange={(event) => setState((prev) => ({ ...prev, projectId: event.target.value }))}
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              className="clickable-surface rounded-md bg-steel-850 p-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => router.push(`/import?projectId=${state.projectId}`)}
+              disabled={!state.projectId}
+            >
+              <p className="text-base font-semibold text-white">Yes, upload BOM</p>
+              <p className="text-sm text-steel-300">Best for importing many parts quickly.</p>
+            </button>
+            <button
+              type="button"
+              className="clickable-surface rounded-md bg-steel-850 p-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                setMode("manual");
+                setStep(1);
+              }}
+              disabled={!state.projectId}
+            >
+              <p className="text-base font-semibold text-white">No, add manually</p>
+              <p className="text-sm text-steel-300">Use guided 3-step wizard for one-off parts.</p>
+            </button>
+          </div>
+        </Card>
+      ) : null}
+
+      {mode === "manual" && step === 1 ? (
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold text-white">Identity</h2>
           <label className="block text-sm text-steel-300">Project</label>
@@ -235,7 +298,7 @@ export function AddPartWizard({
         </Card>
       ) : null}
 
-      {step === 2 ? (
+      {mode === "manual" && step === 2 ? (
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold text-white">Manufacturing Settings</h2>
           <label className="block text-sm text-steel-300">Description</label>
@@ -247,22 +310,28 @@ export function AddPartWizard({
             <div>
               <label className="block text-sm text-steel-300">Quantity required</label>
               <Input
-                type="number"
-                min={1}
+                type="text"
+                inputMode="numeric"
                 value={state.quantityRequired}
                 onChange={(event) =>
-                  setState((prev) => ({ ...prev, quantityRequired: Number(event.target.value) || 1 }))
+                  setState((prev) => ({
+                    ...prev,
+                    quantityRequired: event.target.value.replace(/\D/g, "")
+                  }))
                 }
               />
             </div>
             <div>
               <label className="block text-sm text-steel-300">Quantity complete</label>
               <Input
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 value={state.quantityComplete}
                 onChange={(event) =>
-                  setState((prev) => ({ ...prev, quantityComplete: Number(event.target.value) || 0 }))
+                  setState((prev) => ({
+                    ...prev,
+                    quantityComplete: event.target.value.replace(/\D/g, "")
+                  }))
                 }
               />
             </div>
@@ -283,7 +352,7 @@ export function AddPartWizard({
         </Card>
       ) : null}
 
-      {step === 3 ? (
+      {mode === "manual" && step === 3 ? (
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold text-white">Ownership & Review</h2>
           <label className="block text-sm text-steel-300">Primary owner</label>
@@ -299,45 +368,75 @@ export function AddPartWizard({
             ))}
           </Select>
           <label className="block text-sm text-steel-300">Collaborators (optional)</label>
-          <select
-            multiple
-            className="h-36 w-full rounded-md border border-steel-700 bg-steel-850 p-2 text-sm text-white"
-            value={state.collaboratorIds}
-            onChange={(event) => {
-              const selected = Array.from(event.target.selectedOptions).map((option) => option.value);
-              setState((prev) => ({ ...prev, collaboratorIds: selected }));
-            }}
-          >
-            {users
-              .filter((user) => user.id !== state.primaryOwnerId)
-              .map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.displayName}
-                </option>
-              ))}
-          </select>
+          <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
+            <p className="text-xs text-steel-300">
+              Pick everyone helping on this part.
+            </p>
+            <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+              {users
+                .filter((user) => user.id !== state.primaryOwnerId)
+                .map((user) => {
+                  const checked = state.collaboratorIds.includes(user.id);
+                  return (
+                    <label
+                      key={user.id}
+                      className="flex cursor-pointer items-center justify-between rounded-md border border-steel-700 px-3 py-2 text-sm text-white hover:bg-steel-800"
+                    >
+                      <span>{user.displayName}</span>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setState((prev) => ({
+                            ...prev,
+                            collaboratorIds: checked
+                              ? prev.collaboratorIds.filter((id) => id !== user.id)
+                              : [...prev.collaboratorIds, user.id]
+                          }))
+                        }
+                      />
+                    </label>
+                  );
+                })}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {state.collaboratorIds.length ? (
+              users
+                .filter((user) => state.collaboratorIds.includes(user.id))
+                .map((user) => (
+                  <span key={user.id} className="rounded-full border border-steel-700 bg-steel-800 px-2 py-1 text-xs text-steel-200">
+                    {user.displayName}
+                  </span>
+                ))
+            ) : (
+              <span className="text-xs text-steel-300">No collaborators selected.</span>
+            )}
+          </div>
           <div className="rounded-md border border-steel-700 bg-steel-850 p-3 text-sm text-steel-300">
             <p className="font-semibold text-white">{state.name || "Unnamed part"}</p>
             <p>{isValidPartNumber(partNumber) ? partNumber : "No part number"}</p>
             <p>
-              Qty {state.quantityComplete}/{state.quantityRequired}
+              Qty {state.quantityComplete || "0"}/{state.quantityRequired || "0"}
             </p>
           </div>
         </Card>
       ) : null}
 
-      <div className="flex items-center justify-between">
-        <Button variant="secondary" onClick={back} disabled={step === 1 || createPartMutation.isPending}>
-          Back
-        </Button>
-        {step < 3 ? (
-          <Button onClick={next}>Next</Button>
-        ) : (
-          <Button onClick={() => createPartMutation.mutate()} disabled={createPartMutation.isPending}>
-            {createPartMutation.isPending ? "Creating..." : "Create Part"}
+      {mode === "manual" ? (
+        <div className="flex items-center justify-between">
+          <Button variant="secondary" onClick={back} disabled={createPartMutation.isPending}>
+            {step === 1 ? "Back to Import Choice" : "Back"}
           </Button>
-        )}
-      </div>
+          {step < 3 ? (
+            <Button onClick={next}>Next</Button>
+          ) : (
+            <Button onClick={() => createPartMutation.mutate()} disabled={createPartMutation.isPending}>
+              {createPartMutation.isPending ? "Creating..." : "Create Part"}
+            </Button>
+          )}
+        </div>
+      ) : null}
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
     </section>

@@ -37,12 +37,12 @@ export function ProjectDrawer({
 
   return (
     <>
-      <Button variant="secondary" onClick={() => setOpen(true)}>
+      <Button variant="secondary" onClick={() => setOpen(true)} className="relative z-10 whitespace-nowrap">
         Projects
       </Button>
       {open ? (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
-          <aside className="absolute right-0 top-0 h-full w-full max-w-md border-l border-steel-700 bg-steel-900 p-5">
+        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm">
+          <aside className="absolute right-0 top-0 h-full w-full max-w-md border-l border-steel-700 bg-steel-900 p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Projects</h2>
               <Button variant="ghost" onClick={() => setOpen(false)}>

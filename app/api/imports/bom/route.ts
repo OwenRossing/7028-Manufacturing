@@ -5,6 +5,12 @@ import { CsvOnshapeBomProvider } from "@/lib/bom/csv-provider";
 import { jsonError, requireUser } from "@/lib/api";
 
 const provider = new CsvOnshapeBomProvider();
+const TEAM_NUMBER_FILTERS = ["7028"];
+
+function matchesTeamNumber(partNumber: string | undefined): boolean {
+  if (!partNumber) return false;
+  return TEAM_NUMBER_FILTERS.some((teamNumber) => partNumber.toLowerCase().includes(teamNumber.toLowerCase()));
+}
 
 export const runtime = "nodejs";
 
@@ -34,6 +40,14 @@ export async function POST(request: NextRequest) {
   if (normalizedRows.length === 0) {
     return jsonError("No rows detected in uploaded CSV.", 400);
   }
+  const filteredRows = normalizedRows.filter((row) => matchesTeamNumber(row.partNumber));
+  const filteredOutCount = normalizedRows.length - filteredRows.length;
+  if (filteredRows.length === 0) {
+    return jsonError(
+      `No rows matched team filter (${TEAM_NUMBER_FILTERS.join(", ")}).`,
+      400
+    );
+  }
 
   const existingParts = await prisma.part.findMany({
     where: { projectId },
@@ -41,7 +55,7 @@ export async function POST(request: NextRequest) {
   });
   const byPartNumber = new Map(existingParts.map((part) => [part.partNumber, part]));
 
-  const rows = normalizedRows.map((row) => {
+  const rows = filteredRows.map((row) => {
     if (!row.partNumber || !row.name) {
       return {
         rowIndex: row.rowIndex,
@@ -87,7 +101,8 @@ export async function POST(request: NextRequest) {
     create: rows.filter((row) => row.action === ImportRowAction.CREATE).length,
     update: rows.filter((row) => row.action === ImportRowAction.UPDATE).length,
     noChange: rows.filter((row) => row.action === ImportRowAction.NO_CHANGE).length,
-    error: rows.filter((row) => row.action === ImportRowAction.ERROR).length
+    error: rows.filter((row) => row.action === ImportRowAction.ERROR).length,
+    filteredOut: filteredOutCount
   };
 
   const batch = await prisma.importBatch.create({

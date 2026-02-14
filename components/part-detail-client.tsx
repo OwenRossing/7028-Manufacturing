@@ -23,9 +23,11 @@ type PartData = {
 
 export function PartDetailClient({
   part,
+  hasPhoto,
   users
 }: {
   part: PartData;
+  hasPhoto: boolean;
   users: OwnerOption[];
 }) {
   const queryClient = useQueryClient();
@@ -33,6 +35,7 @@ export function PartDetailClient({
   const [toStatus, setToStatus] = useState<PartStatus>(part.status);
   const [primaryOwnerId, setPrimaryOwnerId] = useState(part.primaryOwnerId ?? "");
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>(part.collaboratorIds);
+  const [hasUploadedPhoto, setHasUploadedPhoto] = useState(hasPhoto);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -122,6 +125,7 @@ export function PartDetailClient({
     },
     onSuccess: () => {
       setMessage("Photo uploaded.");
+      setHasUploadedPhoto(true);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -134,6 +138,11 @@ export function PartDetailClient({
     <div className="space-y-4">
       <Card className="space-y-2">
         <h3 className="text-lg font-semibold text-white">Status</h3>
+        {!hasUploadedPhoto ? (
+          <p className="rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            Add at least one photo before marking this part as DONE.
+          </p>
+        ) : null}
         <p className="text-sm text-steel-300">Current: {status}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -168,6 +177,9 @@ export function PartDetailClient({
           </Button>
         </div>
         <p className="text-xs text-steel-300">Use manual status only when you need to skip or step back.</p>
+        {error?.toLowerCase().includes("photo") ? (
+          <p className="text-sm text-red-400">{error}</p>
+        ) : null}
       </Card>
 
       <Card className="space-y-2">
@@ -182,21 +194,47 @@ export function PartDetailClient({
           ))}
         </Select>
         <label className="text-sm text-steel-300">Collaborators</label>
-        <select
-          multiple
-          value={collaboratorIds}
-          onChange={(event) => {
-            const selected = Array.from(event.target.selectedOptions).map((option) => option.value);
-            setCollaboratorIds(selected);
-          }}
-          className="h-32 w-full rounded-md border border-steel-700 bg-steel-850 p-2 text-sm text-white"
-        >
-          {collaboratorOptions.map((user) => (
-            <option key={user.id} value={user.id}>
-              {user.displayName}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
+          <p className="text-xs text-steel-300">Pick everyone helping with this part.</p>
+          <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+            {collaboratorOptions.map((user) => {
+              const checked = collaboratorIds.includes(user.id);
+              return (
+                <label
+                  key={user.id}
+                  className="clickable-surface flex cursor-pointer items-center justify-between rounded-md bg-steel-850 px-3 py-2 text-sm text-white"
+                >
+                  <span>{user.displayName}</span>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setCollaboratorIds((prev) =>
+                        checked ? prev.filter((id) => id !== user.id) : [...prev, user.id]
+                      )
+                    }
+                  />
+                </label>
+              );
+            })}
+            {collaboratorOptions.length === 0 ? (
+              <p className="text-xs text-steel-300">No eligible collaborators (everyone may be primary owner).</p>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {collaboratorIds.length ? (
+            users
+              .filter((user) => collaboratorIds.includes(user.id))
+              .map((user) => (
+                <span key={user.id} className="rounded-full border border-steel-700 bg-steel-800 px-2 py-1 text-xs text-steel-200">
+                  {user.displayName}
+                </span>
+              ))
+          ) : (
+            <span className="text-xs text-steel-300">No collaborators selected.</span>
+          )}
+        </div>
         <Button onClick={() => ownersMutation.mutate()} disabled={ownersMutation.isPending}>
           {ownersMutation.isPending ? "Saving..." : "Save Owners"}
         </Button>
@@ -229,7 +267,7 @@ export function PartDetailClient({
       </Card>
 
       {message ? <p className="text-sm text-green-400">{message}</p> : null}
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {error && !error.toLowerCase().includes("photo") ? <p className="text-sm text-red-400">{error}</p> : null}
     </div>
   );
 }
