@@ -60,7 +60,7 @@ export function ProjectDrawer({
                   }}
                   className={`w-full rounded-md border px-3 py-2 text-left text-sm ${
                     activeProjectId === project.id
-                      ? "border-brand-500 bg-brand-500/10 text-brand-400"
+                      ? "border-accent-500 bg-accent-500/10 text-accent-400"
                       : "border-steel-700 bg-steel-850 text-white hover:bg-steel-800"
                   }`}
                 >

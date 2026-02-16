@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
+import { editorContext } from "@/lib/permissions";
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
@@ -55,6 +56,7 @@ export async function PATCH(
   if (!existing) {
     return jsonError("Part not found.", 404);
   }
+  const context = await editorContext(userResult, id);
 
   const updated = await prisma.part.update({
     where: { id },
@@ -70,7 +72,10 @@ export async function PATCH(
       partId: id,
       actorUserId: userResult,
       eventType: PartEventType.UPDATED,
-      payloadJson: parsed.data
+      payloadJson: {
+        ...parsed.data,
+        editor: context
+      }
     }
   });
 

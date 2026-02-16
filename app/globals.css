@@ -6,12 +6,10 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(1200px 500px at -10% -15%, rgba(124, 181, 232, 0.25) 0%, rgba(0, 0, 0, 0) 60%),
-    radial-gradient(1200px 600px at 105% -20%, rgba(255, 255, 255, 0.12) 0%, rgba(0, 0, 0, 0) 58%),
-    linear-gradient(180deg, #0b2032 0%, #071522 72%);
-  color: #edf6ff;
-  scrollbar-color: #4b86b6 #0c2338;
+  overflow-x: hidden;
+  background: #171a21;
+  color: #c7d5e0;
+  scrollbar-color: #37506a #171a21;
   scrollbar-width: thin;
 }
 
@@ -30,17 +28,17 @@ a {
 }
 
 *::-webkit-scrollbar-track {
-  background: #0c2338;
+  background: #171a21;
 }
 
 *::-webkit-scrollbar-thumb {
-  border: 2px solid #0c2338;
+  border: 2px solid #171a21;
   border-radius: 999px;
-  background: linear-gradient(180deg, #6aa3d0, #3a73a1);
+  background: #37506a;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #7ab2dd, #4782b5);
+  background: #66c0f4;
 }
 
 .stack {
@@ -56,8 +54,8 @@ a {
 
 .panel {
   border-radius: 0.75rem;
-  border: 1px solid #2a5d87;
-  background: linear-gradient(180deg, #173c5c, #12304a);
+  border: 1px solid #5f7a9a;
+  background: #32465f;
   padding: 1rem;
 }
 
@@ -65,15 +63,15 @@ a {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid #2a5d87;
-  background: #173c5c;
+  border: 1px solid #5f7a9a;
+  background: #3f5875;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
-  color: #d9e9f8;
+  color: #e3edf8;
 }
 
 .muted {
-  color: #d9e9f8;
+  color: #e3edf8;
 }
 
 .table {
@@ -83,7 +81,7 @@ a {
 
 .table th,
 .table td {
-  border-bottom: 1px solid #2a5d87;
+  border-bottom: 1px solid #5f7a9a;
   padding: 0.625rem;
   text-align: left;
 }
@@ -95,12 +93,12 @@ a {
 }
 
 .clickable-surface {
-  border: 1px solid #2a5d87;
+  border: 1px solid #5f7a9a;
   transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .clickable-surface:hover {
-  border-color: #f4c542;
-  background-color: #1a466b;
-  box-shadow: 0 0 0 1px rgba(244, 197, 66, 0.2) inset;
+  border-color: #66c0f4;
+  background-color: #465f7e;
+  box-shadow: 0 0 0 1px rgba(102, 192, 244, 0.3) inset;
 }

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
@@ -13,4 +13,9 @@ export async function saveUpload(params: {
   const finalPath = path.join(UPLOAD_DIR, storageKey);
   await writeFile(finalPath, params.bytes);
   return { storageKey, publicPath: `/uploads/${storageKey}` };
+}
+
+export async function deleteUpload(storageKey: string): Promise<void> {
+  const finalPath = path.join(UPLOAD_DIR, storageKey);
+  await rm(finalPath, { force: true });
 }

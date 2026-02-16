@@ -17,12 +17,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex items-center justify-center rounded-[3px] px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
         variant === "primary" &&
-          "bg-brand-500 text-stone-950 hover:bg-brand-400 active:bg-brand-500/90",
+          "bg-[#66c0f4] text-[#101822] hover:bg-[#8ad1f8] active:bg-[#56afe2]",
         variant === "secondary" &&
-          "border border-steel-700 bg-steel-800 text-white hover:bg-steel-700",
-        variant === "ghost" && "text-steel-300 hover:bg-steel-800 hover:text-white",
+          "border border-[#3a4a5d] bg-[#25272d] text-[#c7d5e0] hover:bg-[#3e4047]",
+        variant === "ghost" && "text-[#8f98a0] hover:bg-[#2a3241] hover:text-[#c7d5e0]",
         className
       )}
       {...props}

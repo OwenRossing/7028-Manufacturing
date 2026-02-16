@@ -24,7 +24,7 @@ export default async function ProjectsPage() {
   });
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 p-4">
       <h1 className="text-2xl font-bold text-white">Projects</h1>
       <p className="text-sm text-steel-300">Administrative tools for project and part management.</p>
       <ProjectAdminPanel

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { editorContext } from "@/lib/permissions";
 
 const schema = z.object({
   primaryOwnerId: z.string().nullable(),
@@ -28,6 +29,7 @@ export async function POST(
   if (!part) {
     return jsonError("Part not found.", 404);
   }
+  const context = await editorContext(userResult, id);
 
   const collaboratorIds = [...new Set(parsed.data.collaboratorIds)];
 
@@ -68,7 +70,8 @@ export async function POST(
         eventType: PartEventType.OWNERS_CHANGED,
         payloadJson: {
           primaryOwnerId: parsed.data.primaryOwnerId,
-          collaboratorIds
+          collaboratorIds,
+          editor: context
         }
       }
     });

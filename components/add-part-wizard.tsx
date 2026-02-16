@@ -144,7 +144,7 @@ export function AddPartWizard({
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 p-4">
       <Card className="space-y-2">
         <h1 className="text-2xl font-bold text-white">Add Part Wizard</h1>
         <p className="text-sm text-steel-300">Start with BOM upload or continue with manual part entry.</p>
@@ -153,7 +153,7 @@ export function AddPartWizard({
             {[1, 2, 3].map((value) => (
               <span
                 key={value}
-                className={`rounded-full px-2 py-1 ${value === step ? "bg-brand-500 text-black" : "bg-steel-800 text-steel-300"}`}
+                className={`rounded-full px-2 py-1 ${value === step ? "bg-accent-500 text-black" : "bg-steel-800 text-steel-300"}`}
               >
                 Step {value}
               </span>

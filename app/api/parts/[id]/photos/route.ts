@@ -1,9 +1,10 @@
 import { PartEventType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { jsonError, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { NoopImageProcessingProvider } from "@/lib/image/provider";
-import { saveUpload } from "@/lib/storage";
+import { deleteUpload, saveUpload } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -83,4 +84,37 @@ export async function POST(
     },
     part: updatedPart
   });
+}
+
+const deleteSchema = z.object({
+  photoId: z.string().min(1)
+});
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const userResult = requireUser(request);
+  if (userResult instanceof NextResponse) {
+    return userResult;
+  }
+
+  const { id } = await params;
+  const payload = await request.json().catch(() => null);
+  const parsed = deleteSchema.safeParse(payload);
+  if (!parsed.success) {
+    return jsonError("photoId is required.", 400);
+  }
+
+  const photo = await prisma.partPhoto.findFirst({
+    where: { id: parsed.data.photoId, partId: id },
+    select: { id: true, storageKey: true }
+  });
+  if (!photo) {
+    return jsonError("Photo not found.", 404);
+  }
+
+  await prisma.partPhoto.delete({ where: { id: photo.id } });
+  await deleteUpload(photo.storageKey);
+  return NextResponse.json({ success: true });
 }

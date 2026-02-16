@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
+import { isAdminUser } from "@/lib/permissions";
 
 const createSchema = z.object({
   projectId: z.string().min(1),
@@ -109,8 +110,10 @@ export async function POST(request: NextRequest) {
     return parsed.response;
   }
 
+  const isAdmin = await isAdminUser(userResult);
+  const effectivePrimaryOwnerId = isAdmin ? parsed.data.primaryOwnerId : userResult;
   const collaboratorIds = [...new Set(parsed.data.collaboratorIds)].filter(
-    (id) => id !== parsed.data.primaryOwnerId
+    (id) => id !== effectivePrimaryOwnerId
   );
 
   const created = await prisma.part.create({
@@ -124,11 +127,11 @@ export async function POST(request: NextRequest) {
       quantityComplete: parsed.data.quantityComplete,
       priority: parsed.data.priority,
       owners:
-        parsed.data.primaryOwnerId || collaboratorIds.length
+        effectivePrimaryOwnerId || collaboratorIds.length
           ? {
               create: [
-                ...(parsed.data.primaryOwnerId
-                  ? [{ userId: parsed.data.primaryOwnerId, role: PartOwnerRole.PRIMARY }]
+                ...(effectivePrimaryOwnerId
+                  ? [{ userId: effectivePrimaryOwnerId, role: PartOwnerRole.PRIMARY }]
                   : []),
                 ...collaboratorIds.map((userId) => ({
                   userId,
@@ -142,7 +145,8 @@ export async function POST(request: NextRequest) {
           actorUserId: userResult,
           eventType: PartEventType.CREATED,
           payloadJson: {
-            source: "manual-wizard"
+            source: "manual-wizard",
+            editor: { isOwnerEditor: true, isAdminEditor: isAdmin }
           }
         }
       }

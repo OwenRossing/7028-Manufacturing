@@ -90,7 +90,7 @@ export function ImportBomClient({
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 p-4">
       <Card className="space-y-3">
         <h1 className="text-2xl font-bold text-white">Import Onshape BOM</h1>
         <p className="text-sm text-steel-300">Upload CSV export and preview changes before commit.</p>

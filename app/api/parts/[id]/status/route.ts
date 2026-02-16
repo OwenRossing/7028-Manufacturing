@@ -5,6 +5,7 @@ import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { canTransition } from "@/lib/status";
 import { getIdempotentResponse, storeIdempotentResponse } from "@/lib/idempotency";
+import { editorContext } from "@/lib/permissions";
 
 const schema = z.object({
   toStatus: z.nativeEnum(PartStatus),
@@ -49,6 +50,7 @@ export async function POST(
   if (parsed.data.toStatus === PartStatus.DONE && part.photos.length === 0) {
     return jsonError("At least one photo is required before setting status to DONE.", 400);
   }
+  const context = await editorContext(userResult, id);
 
   await prisma.part.update({
     where: { id },
@@ -62,7 +64,7 @@ export async function POST(
       eventType: PartEventType.STATUS_CHANGED,
       fromStatus: part.status,
       toStatus: parsed.data.toStatus,
-      payloadJson: parsed.data.note ? { note: parsed.data.note } : undefined
+      payloadJson: parsed.data.note ? { note: parsed.data.note, editor: context } : { editor: context }
     }
   });
 

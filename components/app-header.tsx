@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Plus, Search, Settings, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 
 type ProjectOption = {
   id: string;
   name: string;
+  health: "ON_TRACK" | "AT_RISK" | "OFF_TRACK";
+  done: number;
+  total: number;
 };
 
 type AppHeaderProps = {
@@ -24,14 +25,9 @@ export function AppHeader({ userName, projects }: AppHeaderProps) {
   const searchParams = useSearchParams();
   const paramsString = searchParams.toString();
   const params = useMemo(() => new URLSearchParams(paramsString), [paramsString]);
-  const [search, setSearch] = useState(params.get("q") ?? "");
-  const [accountOpen, setAccountOpen] = useState(false);
-  const accountRef = useRef<HTMLDivElement | null>(null);
+  const [projectOpen, setProjectOpen] = useState(false);
+  const projectRef = useRef<HTMLDivElement | null>(null);
   const activeProjectId = params.get("projectId");
-
-  useEffect(() => {
-    setSearch(params.get("q") ?? "");
-  }, [paramsString, params]);
 
   useEffect(() => {
     if (pathname !== "/" || activeProjectId || projects.length === 0) return;
@@ -42,9 +38,7 @@ export function AppHeader({ userName, projects }: AppHeaderProps) {
 
   useEffect(() => {
     function onMouseDown(event: MouseEvent) {
-      if (!accountRef.current) return;
-      if (accountRef.current.contains(event.target as Node)) return;
-      setAccountOpen(false);
+      if (projectRef.current && !projectRef.current.contains(event.target as Node)) setProjectOpen(false);
     }
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
@@ -55,124 +49,80 @@ export function AppHeader({ userName, projects }: AppHeaderProps) {
     [projects, activeProjectId]
   );
 
-  function onProjectChange(projectId: string) {
-    const nextParams = new URLSearchParams();
-    const trimmedSearch = search.trim();
-    if (trimmedSearch) {
-      nextParams.set("q", trimmedSearch);
-    }
-    if (projectId) {
-      nextParams.set("projectId", projectId);
-    }
-    router.push(`/?${nextParams.toString()}`);
+  const activeProject = useMemo(
+    () => projects.find((project) => project.id === activeProjectId) ?? null,
+    [projects, activeProjectId]
+  );
+
+  function projectHealthClass(health: ProjectOption["health"]): string {
+    if (health === "ON_TRACK") return "text-[#8bc53f]";
+    if (health === "AT_RISK") return "text-[#f5c84b]";
+    return "text-[#ff6b6b]";
   }
 
-  function runSearch(raw: string) {
-    const trimmedSearch = raw.trim();
-    const nextParams = new URLSearchParams();
-    if (trimmedSearch) {
-      nextParams.set("q", trimmedSearch);
-    }
-    if (activeProjectId) {
-      nextParams.set("projectId", activeProjectId);
-    }
-    const nextUrl = `/?${nextParams.toString()}`;
-    if (pathname === "/") {
-      router.replace(nextUrl, { scroll: false });
-    } else {
-      router.push(nextUrl);
-    }
-  }
+  const homeActive = pathname === "/" || pathname.startsWith("/parts") || pathname.startsWith("/import");
+  const accountActive = pathname.startsWith("/settings") || pathname.startsWith("/projects");
 
-  function onSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    runSearch(search);
+  function topTabClass(active: boolean): string {
+    return [
+      "relative inline-flex items-center pb-0.5 text-lg font-semibold md:text-2xl",
+      "after:absolute after:-bottom-[4px] after:left-0 after:h-[3px] after:rounded-full after:bg-[#1a9fff] after:transition-all",
+      active
+        ? "text-[#1a9fff] after:w-full"
+        : "text-[#c7d5e0] hover:text-white after:w-0 hover:after:w-full"
+    ].join(" ");
   }
 
   return (
-    <header className="sticky top-0 z-40 isolate border-b border-steel-700 bg-steel-950/90 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
-        <Link href="/" className="shrink-0 text-lg font-bold text-white">
-          7028 Parts
-        </Link>
-
-        <form onSubmit={onSearchSubmit} className="order-3 w-full md:order-none md:flex-1">
-          <div className="flex h-10 overflow-hidden rounded-md border border-steel-700 bg-steel-850">
-            <button
-              type="submit"
-              aria-label="Search"
-              className="flex items-center border-r border-steel-700 bg-brand-500 px-3 text-stone-950 hover:bg-brand-400"
-            >
-              <Search className="h-4 w-4" />
-            </button>
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-full rounded-none border-0 bg-transparent focus:border-0 focus:ring-0"
-              placeholder="Search by part number, name, owner, status..."
-            />
-            <Link
-              href="/parts/new"
-              className="inline-flex items-center border-l border-steel-700 bg-brand-500 px-4 text-sm font-semibold text-stone-950 hover:bg-brand-400"
-            >
-              <Plus className="h-4 w-4" />
-            </Link>
-          </div>
-        </form>
-
-        <div className="ml-auto hidden items-center gap-2 sm:flex">
-          <span className="text-xs uppercase tracking-wide text-steel-300">Project</span>
-          <Select
-            value={activeProjectId ?? ""}
-            onChange={(event) => onProjectChange(event.target.value)}
-            className="w-52"
-          >
-            {!projects.length ? <option value="">No projects yet</option> : null}
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
+    <header className="sticky top-0 z-50 bg-[#171d25]">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-2">
+        <div className="flex items-center gap-5 text-[30px] font-bold tracking-wide text-steel-100">
+          <Link href="/" className={topTabClass(homeActive)}>HOME</Link>
+          <Link href="/settings" className={topTabClass(accountActive)}>
+            {userName ?? "ACCOUNT"}
+          </Link>
         </div>
 
-        <div className="relative" ref={accountRef}>
-          <Button variant="secondary" onClick={() => setAccountOpen((prev) => !prev)}>
-            <span className="max-w-36 truncate">{userName ?? "Account"}</span>
+        <div className="relative ml-auto" ref={projectRef}>
+          <Button variant="secondary" onClick={() => setProjectOpen((prev) => !prev)} className="h-10 w-52 justify-between rounded-sm border-steel-600 bg-steel-900">
+            <span className={`truncate ${projectHealthClass(activeProject?.health ?? "OFF_TRACK")}`}>
+              {activeProjectName}
+            </span>
             <ChevronDown className="ml-2 h-4 w-4" />
           </Button>
-          {accountOpen ? (
-            <div className="absolute right-0 mt-2 w-64 rounded-md border border-steel-700 bg-steel-900 p-2 shadow-2xl">
-              <p className="px-2 py-1 text-xs uppercase tracking-wide text-steel-300">Account</p>
-              <p className="px-2 pb-2 text-sm text-white">{userName ?? "Not signed in"}</p>
-              <p className="px-2 pb-2 text-xs text-steel-300">Project: {activeProjectName}</p>
-              <Link href="/settings" className="clickable-surface mb-1 flex items-center gap-2 rounded-md px-2 py-2 text-sm text-white">
-                <Settings className="h-4 w-4 text-steel-300" />
-                Settings
-              </Link>
-              <Link href="/projects" className="clickable-surface mb-1 flex items-center gap-2 rounded-md px-2 py-2 text-sm text-white">
-                <Wrench className="h-4 w-4 text-steel-300" />
-                Project Admin
-              </Link>
+          {projectOpen ? (
+            <div className="absolute right-0 mt-2 w-64 rounded-sm border border-steel-700 bg-steel-900 p-2 shadow-2xl">
+              <p className="px-2 pb-2 text-xs uppercase tracking-wide text-steel-300">Project</p>
+              {projects.map((project) => {
+                const nextParams = new URLSearchParams(paramsString);
+                nextParams.set("projectId", project.id);
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => {
+                      if (pathname === "/") router.replace(`/?${nextParams.toString()}`, { scroll: false });
+                      else router.push(`/?${nextParams.toString()}`);
+                      setProjectOpen(false);
+                    }}
+                    className={`mb-1 block w-full rounded-sm border px-2 py-2 text-left text-sm ${
+                      project.id === activeProjectId
+                        ? "border-accent-500 bg-accent-500/15 text-accent-300"
+                        : "border-steel-700 bg-steel-850 text-white hover:bg-steel-800"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`truncate ${projectHealthClass(project.health)}`}>{project.name}</span>
+                      <span className="text-xs text-[#8f98a0]">
+                        {project.done}/{project.total || 0}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>
-      </div>
-
-      <div className="mx-auto flex w-full max-w-7xl items-center gap-2 px-4 pb-3 sm:hidden">
-        <span className="text-xs uppercase tracking-wide text-steel-300">Project</span>
-        <Select
-          value={activeProjectId ?? ""}
-          onChange={(event) => onProjectChange(event.target.value)}
-          className="h-9"
-        >
-          {!projects.length ? <option value="">No projects yet</option> : null}
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </Select>
       </div>
     </header>
   );

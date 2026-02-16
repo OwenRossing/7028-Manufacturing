@@ -232,7 +232,7 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
                     ) : null}
                   </div>
                   <p className="text-xs text-steel-300 md:col-span-6">
-                    {part.partNumber} | <Link href={`/parts/${part.id}`} className="text-brand-400 hover:text-brand-300">Open detail</Link>
+                    {part.partNumber} | <Link href={`/parts/${part.id}`} className="text-accent-400 hover:text-accent-500">Open detail</Link>
                   </p>
                 </div>
               );

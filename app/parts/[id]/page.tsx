@@ -1,9 +1,18 @@
+import { PartStatus } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PartDetailClient } from "@/components/part-detail-client";
-import { statusLabel } from "@/lib/status";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { getUserIdFromCookieStore } from "@/lib/auth";
+import { isAdminUser } from "@/lib/permissions";
+
+function latestActorForStatus(
+  events: Array<{ toStatus: PartStatus | null; actor: { displayName: string } }>,
+  toStatus: PartStatus
+): string {
+  const event = events.find((item) => item.toStatus === toStatus);
+  return event?.actor.displayName ?? "Not recorded";
+}
 
 export default async function PartDetailPage({
   params
@@ -11,6 +20,7 @@ export default async function PartDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const currentUserId = await getUserIdFromCookieStore();
   const [part, users] = await Promise.all([
     prisma.part.findUnique({
       where: { id },
@@ -21,7 +31,7 @@ export default async function PartDetailPage({
         events: {
           include: { actor: true },
           orderBy: { createdAt: "desc" },
-          take: 20
+          take: 40
         }
       }
     }),
@@ -39,67 +49,43 @@ export default async function PartDetailPage({
   const collaboratorIds = part.owners
     .filter((owner) => owner.role === "COLLABORATOR")
     .map((owner) => owner.userId);
+  const isOwner = Boolean(currentUserId && part.owners.some((owner) => owner.userId === currentUserId));
+  const isAdmin = currentUserId ? await isAdminUser(currentUserId) : false;
+
+  const machinedBy = latestActorForStatus(part.events, PartStatus.MACHINED);
+  const finishedBy = latestActorForStatus(part.events, PartStatus.DONE);
 
   return (
-    <section className="space-y-4">
-      <Card className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">{part.name}</h1>
-        <div className="flex flex-wrap gap-2">
-          <Badge>{part.partNumber}</Badge>
-          <Badge>{statusLabel(part.status)}</Badge>
-          <Badge>
-            Progress {part.quantityComplete}/{part.quantityRequired}
-          </Badge>
-          <Badge>{part.project.name}</Badge>
-        </div>
-        <p className="text-sm text-steel-300">
-          {part.description || "No description yet."}
-        </p>
+    <section className="space-y-4 p-4">
+      <Card className="space-y-1">
+        <p className="text-sm uppercase tracking-wide text-steel-300">{part.project.name}</p>
+        <h1 className="text-2xl font-bold text-white">Part Detail</h1>
       </Card>
 
       <PartDetailClient
         part={{
           id: part.id,
+          name: part.name,
+          partNumber: part.partNumber,
+          description: part.description,
+          quantityRequired: part.quantityRequired,
+          quantityComplete: part.quantityComplete,
+          priority: part.priority,
           status: part.status,
           primaryOwnerId: primaryOwner?.userId ?? null,
           collaboratorIds
         }}
-        hasPhoto={part.photos.length > 0}
+        photos={part.photos.map((photo) => ({
+          id: photo.id,
+          storageKey: photo.storageKey,
+          originalName: photo.originalName
+        }))}
         users={users}
+        isOwner={isOwner}
+        isAdmin={isAdmin}
+        machinedBy={machinedBy}
+        finishedBy={finishedBy}
       />
-
-      <Card className="space-y-2">
-        <h3 className="text-lg font-semibold text-white">Recent Activity</h3>
-        <div className="space-y-2">
-          {part.events.map((event) => (
-            <div key={event.id} className="flex items-center justify-between gap-2">
-              <span>
-                <strong>{event.eventType}</strong> by {event.actor.displayName}
-              </span>
-              <span className="text-sm text-steel-300">{event.createdAt.toLocaleString()}</span>
-            </div>
-          ))}
-          {part.events.length === 0 ? <p className="text-sm text-steel-300">No events yet.</p> : null}
-        </div>
-      </Card>
-
-      <Card className="space-y-2">
-        <h3 className="text-lg font-semibold text-white">Photos</h3>
-        <div className="flex flex-wrap gap-3">
-          {part.photos.map((photo) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={photo.id}
-              src={`/uploads/${photo.storageKey}`}
-              alt={photo.originalName}
-              width={120}
-              height={120}
-              className="rounded-md border border-steel-700 object-cover"
-            />
-          ))}
-          {part.photos.length === 0 ? <p className="text-sm text-steel-300">No photos uploaded yet.</p> : null}
-        </div>
-      </Card>
     </section>
   );
 }
