@@ -101,7 +101,7 @@ function subsystemLabel(key: SubsystemKey): string {
   return `Subsystem ${value}`;
 }
 
-function ownerSummary(part: PartListItem): string {
+function assigneeSummary(part: PartListItem): string {
   const names = part.owners.map((owner) => owner.user.displayName);
   if (!names.length) return "Unassigned";
   if (names.length <= 2) return names.join(", ");
@@ -685,7 +685,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <div className="space-y-1 p-3">
                       <p className="line-clamp-1 text-xl font-semibold text-white">{part.name}</p>
                       <p className="line-clamp-1 text-sm text-steel-300">{part.partNumber}</p>
-                      <p className="line-clamp-1 text-sm text-steel-300">Owners: {ownerSummary(part)}</p>
+                      <p className="line-clamp-1 text-sm text-steel-300">Assignees: {assigneeSummary(part)}</p>
                       <p className="text-sm text-steel-300">
                         Stage: {stageLabel(statusToStage(part.status))} | Qty {part.quantityComplete}/{part.quantityRequired}
                       </p>
@@ -721,7 +721,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.82))] p-3">
                       <p className="line-clamp-1 text-base font-semibold text-white">{part.name}</p>
                       <p className="line-clamp-1 text-xs text-steel-300">{part.partNumber}</p>
-                      <p className="line-clamp-1 text-xs text-steel-300">{ownerSummary(part)}</p>
+                      <p className="line-clamp-1 text-xs text-steel-300">{assigneeSummary(part)}</p>
                       <p className="text-xs text-steel-200">Qty {part.quantityComplete}/{part.quantityRequired}</p>
                     </div>
                   </button>
@@ -769,7 +769,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <div className="relative min-h-[102px] space-y-1 bg-[linear-gradient(180deg,rgba(0,0,0,0.15),rgba(0,0,0,0.55))] p-3">
                     <p className="line-clamp-1 text-base font-semibold text-white">{part.name}</p>
                     <p className="line-clamp-1 text-xs text-steel-300">{part.partNumber}</p>
-                    <p className="line-clamp-1 text-xs text-steel-300">{ownerSummary(part)}</p>
+                    <p className="line-clamp-1 text-xs text-steel-300">{assigneeSummary(part)}</p>
                     <p className="text-xs text-steel-300">Stage: {stageLabel(statusToStage(part.status))}</p>
                     <span className="absolute right-3 top-3 rounded-full border border-white/25 bg-black/50 px-2 py-0.5 text-xs text-white">
                       {part.quantityComplete}/{part.quantityRequired}
@@ -895,11 +895,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </div>
               <div className="grid grid-cols-2 gap-2 px-2 py-2 text-center lg:grid-cols-4">
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Owner</p>
+                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Primary Assignee</p>
                   <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedPrimaryOwnerName}</p>
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Collaborators</p>
+                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Assignees</p>
                   <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedCollaboratorLabel}</p>
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
@@ -962,9 +962,9 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
 
                   <div className="space-y-4">
                     <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                      <h4 className="text-2xl font-semibold text-[#d6e4f2]">Collaborators</h4>
+                      <h4 className="text-2xl font-semibold text-[#d6e4f2]">Assignees</h4>
                       <p className="mt-3 text-lg text-[#9fb0c2]">
-                        {selectedPart.owners.length} collaborators assigned
+                        {selectedPart.owners.length} assignees assigned
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {selectedPart.owners.slice(0, 6).map((owner) => (
@@ -1037,7 +1037,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       discussionMessages.map((message) => (
                         <div key={message.id} className="rounded-[3px] border border-[#2e3f55] bg-[#223044] px-3 py-2">
                           <p className="text-xs text-[#9fb0c2]">
-                            {message.author} • {new Date(message.createdAt).toLocaleString()}
+                            {message.author} - {new Date(message.createdAt).toLocaleString()}
                           </p>
                           <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#d6e4f2]">{message.text}</p>
                         </div>
@@ -1050,7 +1050,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <textarea
                       value={discussionInput}
                       onChange={(event) => setDiscussionInput(event.target.value)}
-                      placeholder="Type a message for collaborators..."
+                      placeholder="Type a message for assignees..."
                       className="min-h-[72px] flex-1 resize-y rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2 text-sm text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                     />
                     <button
@@ -1104,9 +1104,9 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     </select>
                   </div>
                   <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Ownership</p>
-                    <p className="mt-2 text-lg text-[#d6e4f2]">Owner: {selectedPrimaryOwnerName}</p>
-                    <p className="text-base text-[#9fb0c2]">Collaborators: {selectedCollaboratorLabel}</p>
+                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Assignees</p>
+                    <p className="mt-2 text-lg text-[#d6e4f2]">Primary assignee: {selectedPrimaryOwnerName}</p>
+                    <p className="text-base text-[#9fb0c2]">Additional assignees: {selectedCollaboratorLabel}</p>
                   </div>
                   <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
                     <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Quantity</p>

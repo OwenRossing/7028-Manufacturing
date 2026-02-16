@@ -354,8 +354,8 @@ export function AddPartWizard({
 
       {mode === "manual" && step === 3 ? (
         <Card className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Ownership & Review</h2>
-          <label className="block text-sm text-steel-300">Primary owner</label>
+          <h2 className="text-lg font-semibold text-white">Assignees & Review</h2>
+          <label className="block text-sm text-steel-300">Primary assignee</label>
           <Select
             value={state.primaryOwnerId}
             onChange={(event) => setState((prev) => ({ ...prev, primaryOwnerId: event.target.value }))}
@@ -367,7 +367,7 @@ export function AddPartWizard({
               </option>
             ))}
           </Select>
-          <label className="block text-sm text-steel-300">Collaborators (optional)</label>
+          <label className="block text-sm text-steel-300">Additional assignees (optional)</label>
           <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
             <p className="text-xs text-steel-300">
               Pick everyone helping on this part.
@@ -410,7 +410,7 @@ export function AddPartWizard({
                   </span>
                 ))
             ) : (
-              <span className="text-xs text-steel-300">No collaborators selected.</span>
+              <span className="text-xs text-steel-300">No additional assignees selected.</span>
             )}
           </div>
           <div className="rounded-md border border-steel-700 bg-steel-850 p-3 text-sm text-steel-300">

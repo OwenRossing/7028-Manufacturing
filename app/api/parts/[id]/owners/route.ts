@@ -37,7 +37,7 @@ export async function POST(
     parsed.data.primaryOwnerId &&
     collaboratorIds.includes(parsed.data.primaryOwnerId)
   ) {
-    return jsonError("Primary owner cannot also be a collaborator.", 400);
+    return jsonError("Primary assignee cannot also be listed as an additional assignee.", 400);
   }
 
   const updatedPart = await prisma.$transaction(async (tx) => {

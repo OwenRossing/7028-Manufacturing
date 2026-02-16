@@ -196,7 +196,7 @@ export function PartDetailClient({
         })
       });
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) throw new Error(data?.error ?? "Unable to update owners.");
+      if (!response.ok) throw new Error(data?.error ?? "Unable to update assignees.");
       return data;
     },
     onMutate: () => {
@@ -204,7 +204,7 @@ export function PartDetailClient({
       setError(null);
     },
     onSuccess: () => {
-      setMessage("Ownership updated.");
+      setMessage("Assignees updated.");
       void queryClient.invalidateQueries({ queryKey: ["parts"] });
     },
     onError: (mutationError: Error) => setError(mutationError.message)
@@ -286,7 +286,7 @@ export function PartDetailClient({
           </div>
         </div>
 
-        {!isPrivilegedEditor ? <p className="text-xs text-steel-300">You are not the owner. Changes are logged.</p> : null}
+        {!isPrivilegedEditor ? <p className="text-xs text-steel-300">You are not an assignee. Changes are logged.</p> : null}
         {!hasPhotos ? (
           <p className="rounded-sm border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
             Upload a photo before moving to Completed.
@@ -442,8 +442,8 @@ export function PartDetailClient({
             </div>
 
             <div className="space-y-2 border-t border-steel-700 pt-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-steel-300">Ownership</h3>
-              <label className="text-sm text-steel-300">Primary owner</label>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-steel-300">Assignees</h3>
+              <label className="text-sm text-steel-300">Primary assignee</label>
               <Select value={primaryOwnerId} onChange={(event) => setPrimaryOwnerId(event.target.value)}>
                 <option value="">Unassigned</option>
                 {users.map((user) => (
@@ -452,7 +452,7 @@ export function PartDetailClient({
                   </option>
                 ))}
               </Select>
-              <label className="text-sm text-steel-300">Collaborators</label>
+              <label className="text-sm text-steel-300">Additional assignees</label>
               <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
                 <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
                   {collaboratorOptions.map((user) => {
@@ -478,7 +478,7 @@ export function PartDetailClient({
                 </div>
               </div>
               <Button onClick={() => ownersMutation.mutate()} disabled={ownersMutation.isPending}>
-                {ownersMutation.isPending ? "Saving..." : "Save Ownership"}
+                {ownersMutation.isPending ? "Saving..." : "Save Assignees"}
               </Button>
             </div>
           </Card>
