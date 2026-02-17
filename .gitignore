@@ -1,8 +1,10 @@
 .next
 node_modules
-.env
-.env.local
+.env.example
 coverage
 dist
+tsconfig.tsbuildinfo
+*client_secret*.json
+*credentials*.json
 public/uploads/*
 !public/uploads/.gitkeep
