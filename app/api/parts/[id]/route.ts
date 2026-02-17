@@ -1,10 +1,10 @@
-import { PartEventType } from "@prisma/client";
+import { PartEventType, PartStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
-import { editorContext } from "@/lib/permissions";
+import { canManagePart, editorContext, isAdminUser } from "@/lib/permissions";
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
@@ -29,7 +29,7 @@ export async function GET(
     where: { id },
     include: {
       owners: { include: { user: true } },
-      photos: { orderBy: { createdAt: "desc" }, take: 10 }
+      photos: { orderBy: { createdAt: "desc" }, take: 100 }
     }
   });
   if (!part) {
@@ -56,11 +56,54 @@ export async function PATCH(
   if (!existing) {
     return jsonError("Part not found.", 404);
   }
+  if (!(await canManagePart(userResult, id))) {
+    return jsonError("You do not have permission to edit this part.", 403);
+  }
   const context = await editorContext(userResult, id);
+
+  const nextData: {
+    name?: string;
+    partNumber?: string;
+    description?: string | null;
+    quantityRequired?: number;
+    quantityComplete?: number;
+    priority?: number;
+    status?: PartStatus;
+  } = { ...parsed.data };
+  if (nextData.quantityRequired !== undefined && nextData.quantityComplete !== undefined) {
+    if (nextData.quantityComplete > nextData.quantityRequired) {
+      return jsonError("Completed quantity cannot exceed required quantity.", 400);
+    }
+  } else if (
+    nextData.quantityRequired !== undefined &&
+    nextData.quantityComplete === undefined &&
+    existing.quantityComplete > nextData.quantityRequired
+  ) {
+    return jsonError("Required quantity cannot be lower than completed quantity.", 400);
+  }
+
+  const targetRequired = nextData.quantityRequired ?? existing.quantityRequired;
+  const targetComplete = nextData.quantityComplete ?? existing.quantityComplete;
+  if (targetComplete >= targetRequired) {
+    const hasPhoto = await prisma.partPhoto.findFirst({
+      where: { partId: id },
+      select: { id: true }
+    });
+    if (!hasPhoto) {
+      return jsonError("Upload at least one photo before completing all quantity.", 400);
+    }
+    nextData.quantityComplete = targetRequired;
+    nextData.status = PartStatus.DONE;
+  } else if ((nextData.status ?? existing.status) === PartStatus.DONE && targetComplete < targetRequired) {
+    nextData.status = PartStatus.DESIGNED;
+  }
+  if ((nextData.status ?? existing.status) === PartStatus.DESIGNED) {
+    nextData.quantityComplete = 0;
+  }
 
   const updated = await prisma.part.update({
     where: { id },
-    data: parsed.data,
+    data: nextData,
     include: {
       owners: { include: { user: true }, orderBy: { role: "asc" } },
       photos: { orderBy: { createdAt: "desc" }, take: 1 }
@@ -73,7 +116,7 @@ export async function PATCH(
       actorUserId: userResult,
       eventType: PartEventType.UPDATED,
       payloadJson: {
-        ...parsed.data,
+        ...nextData,
         editor: context
       }
     }
@@ -95,6 +138,9 @@ export async function DELETE(
   const existing = await prisma.part.findUnique({ where: { id }, select: { id: true } });
   if (!existing) {
     return jsonError("Part not found.", 404);
+  }
+  if (!(await isAdminUser(userResult))) {
+    return jsonError("Admin access required to delete parts.", 403);
   }
 
   await prisma.part.delete({ where: { id } });

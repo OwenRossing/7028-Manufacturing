@@ -3,13 +3,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { CsvOnshapeBomProvider } from "@/lib/bom/csv-provider";
 import { jsonError, requireUser } from "@/lib/api";
+import { isAdminUser } from "@/lib/permissions";
 
 const provider = new CsvOnshapeBomProvider();
-const TEAM_NUMBER_FILTERS = ["7028"];
 
-function matchesTeamNumber(partNumber: string | undefined): boolean {
+function normalizeYear(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 4);
+}
+
+function matchesPartPrefix(
+  partNumber: string | undefined,
+  filters: { team: string; year: string; robot: string }
+): boolean {
   if (!partNumber) return false;
-  return TEAM_NUMBER_FILTERS.some((teamNumber) => partNumber.toLowerCase().includes(teamNumber.toLowerCase()));
+  const team = filters.team.replace(/\D/g, "").slice(0, 4);
+  const year = normalizeYear(filters.year);
+  const robot = filters.robot.replace(/\D/g, "");
+  if (!team) return false;
+
+  const normalized = partNumber.toUpperCase();
+  const fullPrefix = `${team}-${year}-${robot}`;
+  const legacyPrefix = `${team}-${year}-R${robot}`;
+  if (team && year && robot) {
+    return (
+      normalized.startsWith(fullPrefix.toUpperCase()) ||
+      normalized.startsWith(legacyPrefix.toUpperCase())
+    );
+  }
+  if (team && year) return normalized.startsWith(`${team}-${year}`.toUpperCase());
+  return normalized.startsWith(team.toUpperCase());
 }
 
 export const runtime = "nodejs";
@@ -18,6 +40,9 @@ export async function POST(request: NextRequest) {
   const userResult = requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
+  }
+  if (!(await isAdminUser(userResult))) {
+    return jsonError("Admin access required for BOM import.", 403);
   }
 
   const formData = await request.formData();
@@ -29,6 +54,9 @@ export async function POST(request: NextRequest) {
   if (!(file instanceof File)) {
     return jsonError("CSV file is required.", 400);
   }
+  const teamNumber = String(formData.get("teamNumber") ?? "").trim();
+  const seasonYear = String(formData.get("seasonYear") ?? "").trim();
+  const robotNumber = String(formData.get("robotNumber") ?? "").trim();
 
   const project = await prisma.project.findUnique({ where: { id: projectId } });
   if (!project) {
@@ -40,13 +68,16 @@ export async function POST(request: NextRequest) {
   if (normalizedRows.length === 0) {
     return jsonError("No rows detected in uploaded CSV.", 400);
   }
-  const filteredRows = normalizedRows.filter((row) => matchesTeamNumber(row.partNumber));
+  const filteredRows = normalizedRows.filter((row) =>
+    matchesPartPrefix(row.partNumber, {
+      team: teamNumber || "7028",
+      year: seasonYear || String(new Date().getFullYear()),
+      robot: robotNumber || "1"
+    })
+  );
   const filteredOutCount = normalizedRows.length - filteredRows.length;
   if (filteredRows.length === 0) {
-    return jsonError(
-      `No rows matched team filter (${TEAM_NUMBER_FILTERS.join(", ")}).`,
-      400
-    );
+    return jsonError("No rows matched Team/Year/Robot filter.", 400);
   }
 
   const existingParts = await prisma.part.findMany({

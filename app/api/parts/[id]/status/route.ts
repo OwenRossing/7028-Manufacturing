@@ -5,7 +5,7 @@ import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { canTransition } from "@/lib/status";
 import { getIdempotentResponse, storeIdempotentResponse } from "@/lib/idempotency";
-import { editorContext } from "@/lib/permissions";
+import { canManagePart, editorContext } from "@/lib/permissions";
 
 const schema = z.object({
   toStatus: z.nativeEnum(PartStatus),
@@ -43,6 +43,9 @@ export async function POST(
   if (!part) {
     return jsonError("Part not found.", 404);
   }
+  if (!(await canManagePart(userResult, id))) {
+    return jsonError("You do not have permission to update this part status.", 403);
+  }
   if (!canTransition(part.status, parsed.data.toStatus)) {
     return jsonError("Invalid status transition.", 400);
   }
@@ -52,9 +55,19 @@ export async function POST(
   }
   const context = await editorContext(userResult, id);
 
+  const nextData: { status: PartStatus; quantityComplete?: number } = {
+    status: parsed.data.toStatus
+  };
+  if (parsed.data.toStatus === PartStatus.DONE) {
+    nextData.quantityComplete = part.quantityRequired;
+  }
+  if (parsed.data.toStatus === PartStatus.DESIGNED) {
+    nextData.quantityComplete = 0;
+  }
+
   await prisma.part.update({
     where: { id },
-    data: { status: parsed.data.toStatus }
+    data: nextData
   });
 
   await prisma.partEvent.create({

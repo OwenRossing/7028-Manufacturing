@@ -1,389 +1,120 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { PlusSquare, Upload, X } from "lucide-react";
-
-type MenuPoint = {
-  x: number;
-  y: number;
-};
-
-type AddMode = "MANUAL" | "IMPORT_CSV" | "ONSHAPE";
-
-type PreviewRow = {
-  rowIndex: number;
-  partNumber: string | null;
-  name: string | null;
-  quantityNeeded: number | null;
-  action: "CREATE" | "UPDATE" | "NO_CHANGE" | "ERROR";
-  errorMessage: string | null;
-};
-
-type ImportSummary = {
-  total: number;
-  create: number;
-  update: number;
-  noChange: number;
-  error: number;
-  filteredOut: number;
-};
+import { useEffect, useState } from "react";
+import { Home, Users, User, Smartphone, Monitor, SlidersHorizontal } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export function AppBottomBar({ completed, total }: { completed: number; total: number }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const activeProjectId = searchParams.get("projectId");
-  const [menuPoint, setMenuPoint] = useState<MenuPoint | null>(null);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [mode, setMode] = useState<AddMode>("MANUAL");
-  const [info, setInfo] = useState<string | null>(null);
-
-  const [name, setName] = useState("");
-  const [partNumber, setPartNumber] = useState("");
-  const [description, setDescription] = useState("");
-  const [quantityRequired, setQuantityRequired] = useState("1");
-  const [quantityComplete, setQuantityComplete] = useState("0");
-  const [priority, setPriority] = useState("3");
-  const [manualBusy, setManualBusy] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [previewBusy, setPreviewBusy] = useState(false);
-  const [commitBusy, setCommitBusy] = useState(false);
-  const [batchId, setBatchId] = useState<string | null>(null);
-  const [rows, setRows] = useState<PreviewRow[]>([]);
-  const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const paramsString = searchParams.toString();
+  const [uiMode, setUiMode] = useState<"auto" | "mobile" | "desktop">("auto");
 
   useEffect(() => {
-    function onGlobalClick() {
-      setMenuPoint(null);
-    }
-    function onEsc(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setMenuPoint(null);
-        setWizardOpen(false);
+    try {
+      const stored = window.localStorage.getItem("ui-mode");
+      if (stored === "mobile" || stored === "desktop" || stored === "auto") {
+        setUiMode(stored);
       }
+    } catch {
+      setUiMode("auto");
     }
-    window.addEventListener("click", onGlobalClick);
-    window.addEventListener("keydown", onEsc);
-    return () => {
-      window.removeEventListener("click", onGlobalClick);
-      window.removeEventListener("keydown", onEsc);
-    };
   }, []);
 
-  const menuStyle = useMemo(() => {
-    if (!menuPoint) return undefined;
-    const width = 260;
-    const height = 140;
-    const x = Math.min(menuPoint.x, window.innerWidth - width - 8);
-    const y = Math.max(8, menuPoint.y - height - 8);
-    return { left: x, top: y };
-  }, [menuPoint]);
-
-  function openMenu(event: React.MouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    setMenuPoint({ x: event.clientX, y: event.clientY });
+  function setMode(mode: "auto" | "mobile" | "desktop") {
+    setUiMode(mode);
+    try {
+      window.localStorage.setItem("ui-mode", mode);
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent("ui-mode-change", { detail: mode }));
   }
 
-  function openWizard(nextMode: AddMode) {
-    setMode(nextMode);
-    setInfo(null);
-    setWizardOpen(true);
-    setMenuPoint(null);
+  const overviewActive =
+    pathname === "/" && (searchParams.get("tab") === "overview" || searchParams.get("tab") === "community");
+  const accountActive = pathname.startsWith("/settings");
+  const homeActive = pathname === "/" && !overviewActive;
+
+  function goHome() {
+    const next = new URLSearchParams(paramsString);
+    next.delete("tab");
+    router.push(next.toString() ? `/?${next.toString()}` : "/");
   }
 
-  async function submitManual() {
-    if (!activeProjectId) {
-      setInfo("Select a project first.");
-      return;
-    }
-    if (!name.trim() || !partNumber.trim()) {
-      setInfo("Name and Part ID are required.");
-      return;
-    }
-    setManualBusy(true);
-    setInfo(null);
-    const response = await fetch("/api/parts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId: activeProjectId,
-        partNumber: partNumber.trim(),
-        name: name.trim(),
-        description: description.trim() || null,
-        quantityRequired: Number.parseInt(quantityRequired, 10) || 1,
-        quantityComplete: Number.parseInt(quantityComplete, 10) || 0,
-        priority: Number.parseInt(priority, 10) || 3
-      })
-    });
-    const data = (await response.json().catch(() => null)) as { error?: string; id?: string } | null;
-    if (!response.ok) {
-      setInfo(data?.error ?? "Unable to create part.");
-      setManualBusy(false);
-      return;
-    }
-    setInfo("Part created.");
-    setManualBusy(false);
-    setWizardOpen(false);
-    router.refresh();
-  }
-
-  async function previewCsv() {
-    if (!activeProjectId) {
-      setInfo("Select a project first.");
-      return;
-    }
-    const file = fileInputRef.current?.files?.[0];
-    if (!file) {
-      setInfo("Choose a CSV file first.");
-      return;
-    }
-    setPreviewBusy(true);
-    setInfo(null);
-    const formData = new FormData();
-    formData.set("projectId", activeProjectId);
-    formData.set("file", file);
-    const response = await fetch("/api/imports/bom", { method: "POST", body: formData });
-    const data = (await response.json().catch(() => null)) as
-      | { error?: string; batchId?: string; rows?: PreviewRow[]; summary?: ImportSummary }
-      | null;
-    if (!response.ok || !data?.batchId) {
-      setInfo(data?.error ?? "Preview failed.");
-      setPreviewBusy(false);
-      return;
-    }
-    setBatchId(data.batchId);
-    setRows(data.rows ?? []);
-    setSummary(data.summary ?? null);
-    setPreviewBusy(false);
-  }
-
-  async function commitCsv() {
-    if (!batchId) return;
-    setCommitBusy(true);
-    setInfo(null);
-    const response = await fetch(`/api/imports/${batchId}/commit`, {
-      method: "POST",
-      headers: { "x-idempotency-key": crypto.randomUUID() }
-    });
-    const data = (await response.json().catch(() => null)) as { error?: string; summary?: string } | null;
-    if (!response.ok) {
-      setInfo(data?.error ?? "Commit failed.");
-      setCommitBusy(false);
-      return;
-    }
-    setInfo(data?.summary ?? "Import committed.");
-    setCommitBusy(false);
-    setWizardOpen(false);
-    router.refresh();
+  function goOverview() {
+    const next = new URLSearchParams(paramsString);
+    next.set("tab", "overview");
+    router.push(`/?${next.toString()}`);
   }
 
   return (
-    <>
-      <footer className="fixed bottom-0 left-0 right-0 z-50 h-12 border-t border-[#1f2b3a] bg-[#171d25]">
-        <div className="mx-auto flex h-full w-full items-center justify-between px-5 text-sm">
+    <footer className="fixed bottom-0 left-0 right-0 z-50 h-12 border-t border-[#1f2b3a] bg-[#171d25]">
+      <div className="mx-auto hidden h-full w-full items-center justify-between px-5 text-sm text-[#67707b] lg:flex">
+        <div>{completed} of {total} parts complete</div>
+        <div className="flex items-center gap-1 text-xs">
           <button
-            onClick={openMenu}
-            className="inline-flex items-center gap-2 rounded-[3px] px-2 py-1 text-[#67707b] hover:bg-[#212a37] hover:text-white"
+            type="button"
+            onClick={() => setMode("auto")}
+            className={`rounded-[3px] border px-2 py-1 ${
+              uiMode === "auto"
+                ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#cde9ff]"
+                : "border-[#324154] bg-[#202b3a] text-[#8fa0b2]"
+            }`}
           >
-            <PlusSquare className="h-4 w-4" />
-            <span>Add Part</span>
+            Auto
           </button>
-
-          <div className="ml-auto text-[#67707b] hover:text-white">
-            {completed} of {total} parts complete
-          </div>
+          <button
+            type="button"
+            onClick={() => setMode("mobile")}
+            className={`rounded-[3px] border px-2 py-1 ${
+              uiMode === "mobile"
+                ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#cde9ff]"
+                : "border-[#324154] bg-[#202b3a] text-[#8fa0b2]"
+            }`}
+          >
+            Mobile
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("desktop")}
+            className={`rounded-[3px] border px-2 py-1 ${
+              uiMode === "desktop"
+                ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#cde9ff]"
+                : "border-[#324154] bg-[#202b3a] text-[#8fa0b2]"
+            }`}
+          >
+            Desktop
+          </button>
         </div>
-      </footer>
-
-      {menuPoint ? (
-        <div
-          className="fixed z-[70] w-[260px] border border-[#4a5160] bg-[#3d4450] text-[#dcdedf] shadow-2xl"
-          style={menuStyle}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button onClick={() => openWizard("MANUAL")} className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]">
-            Manual
-          </button>
-          <button onClick={() => openWizard("ONSHAPE")} className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]">
-            Grab From Onshape
-          </button>
-          <button onClick={() => openWizard("IMPORT_CSV")} className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]">
-            Import BOM CSV
-          </button>
-        </div>
-      ) : null}
-
-      {wizardOpen ? (
-        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-[760px] rounded-[6px] border border-[#3f4a5b] bg-[#2b313d] shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
-            <div className="flex items-center justify-between border-b border-[#3f4a5b] px-6 py-4">
-              <div>
-                <h2 className="text-2xl font-semibold text-[#dcdedf]">
-                  {mode === "MANUAL" ? "Manual Add" : mode === "IMPORT_CSV" ? "Import BOM CSV" : "Grab From Onshape"}
-                </h2>
-                <p className="text-sm text-[#9aa8b8]">
-                  {mode === "MANUAL"
-                    ? "Create a part without leaving this modal."
-                    : mode === "IMPORT_CSV"
-                    ? "Upload CSV, preview changes, then commit."
-                    : "Direct Onshape API import (coming next)."}
-                </p>
-              </div>
-              <button
-                onClick={() => setWizardOpen(false)}
-                className="rounded-[3px] border border-[#4b5668] bg-[#364052] p-2 text-[#dcdedf] hover:bg-[#445065]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-6 py-4">
-              {mode === "MANUAL" ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Part Name</label>
-                    <input
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Part ID</label>
-                    <input
-                      value={partNumber}
-                      onChange={(event) => setPartNumber(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Priority</label>
-                    <select
-                      value={priority}
-                      onChange={(event) => setPriority(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                    >
-                      <option value="1">ASAP</option>
-                      <option value="3">Normal</option>
-                      <option value="5">Backburner</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Quantity Required</label>
-                    <input
-                      value={quantityRequired}
-                      onChange={(event) => setQuantityRequired(event.target.value.replace(/\D/g, ""))}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Quantity Complete</label>
-                    <input
-                      value={quantityComplete}
-                      onChange={(event) => setQuantityComplete(event.target.value.replace(/\D/g, ""))}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Material / Notes</label>
-                    <input
-                      value={description}
-                      onChange={(event) => setDescription(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              {mode === "IMPORT_CSV" ? (
-                <div className="space-y-3">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="hidden"
-                    onChange={(event) => setFileName(event.target.files?.[0]?.name ?? null)}
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-[4px] border border-[#3f4a5b] bg-[#202833] px-3 py-2 text-[#dcdedf] hover:bg-[#273140]"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Choose CSV
-                  </button>
-                  <p className="text-sm text-[#9aa8b8]">{fileName ?? "No file selected."}</p>
-                  {summary ? (
-                    <p className="text-sm text-[#9aa8b8]">
-                      Rows: {summary.total}, Create: {summary.create}, Update: {summary.update}, No change:{" "}
-                      {summary.noChange}, Errors: {summary.error}
-                    </p>
-                  ) : null}
-                  {rows.length ? (
-                    <div className="max-h-48 overflow-y-auto rounded-[4px] border border-[#3f4a5b] bg-[#202833] p-2 text-xs text-[#dcdedf]">
-                      {rows.slice(0, 18).map((row) => (
-                        <p key={row.rowIndex}>
-                          #{row.rowIndex} {row.partNumber ?? "-"} {row.name ?? "-"} ({row.action})
-                        </p>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {mode === "ONSHAPE" ? (
-                <p className="rounded-[3px] border border-yellow-500/40 bg-yellow-500/15 px-3 py-2 text-sm text-yellow-100">
-                  Onshape API import is not wired yet. Use Import BOM CSV in this modal for now.
-                </p>
-              ) : null}
-
-              {info ? (
-                <p className="rounded-[3px] border border-yellow-500/40 bg-yellow-500/15 px-3 py-2 text-sm text-yellow-100">
-                  {info}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 border-t border-[#3f4a5b] px-6 py-4">
-              <button
-                onClick={() => setWizardOpen(false)}
-                className="rounded-[4px] border border-[#4b5668] bg-[#364052] px-4 py-2 text-[#dcdedf] hover:bg-[#445065]"
-              >
-                Cancel
-              </button>
-              {mode === "MANUAL" ? (
-                <button
-                  onClick={submitManual}
-                  disabled={manualBusy}
-                  className="rounded-[4px] border border-[#2f6eb6] bg-[#1a9fff] px-4 py-2 text-white hover:bg-[#3aaeff] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {manualBusy ? "Creating..." : "Create Part"}
-                </button>
-              ) : null}
-              {mode === "IMPORT_CSV" ? (
-                <>
-                  <button
-                    onClick={previewCsv}
-                    disabled={previewBusy}
-                    className="rounded-[4px] border border-[#3f4a5b] bg-[#202833] px-4 py-2 text-[#dcdedf] hover:bg-[#273140] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {previewBusy ? "Previewing..." : "Preview"}
-                  </button>
-                  <button
-                    onClick={commitCsv}
-                    disabled={!batchId || commitBusy}
-                    className="rounded-[4px] border border-[#2f6eb6] bg-[#1a9fff] px-4 py-2 text-white hover:bg-[#3aaeff] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {commitBusy ? "Committing..." : "Commit"}
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
+      </div>
+      <div className="mx-auto flex h-full w-full items-center justify-around px-3 text-[#9aa8b8] lg:hidden">
+        <button type="button" onClick={goHome} className={`inline-flex flex-col items-center text-[10px] ${homeActive ? "text-[#1a9fff]" : ""}`}>
+          <Home className="h-4 w-4" />
+          Home
+        </button>
+        <button type="button" onClick={goOverview} className={`inline-flex flex-col items-center text-[10px] ${overviewActive ? "text-[#1a9fff]" : ""}`}>
+          <Users className="h-4 w-4" />
+          Overview
+        </button>
+        <button type="button" onClick={() => router.push("/settings")} className={`inline-flex flex-col items-center text-[10px] ${accountActive ? "text-[#1a9fff]" : ""}`}>
+          <User className="h-4 w-4" />
+          Account
+        </button>
+        <button type="button" onClick={() => setMode("mobile")} className="inline-flex flex-col items-center text-[10px]">
+          <Smartphone className="h-4 w-4" />
+          Mobile
+        </button>
+        <button type="button" onClick={() => setMode("desktop")} className="inline-flex flex-col items-center text-[10px]">
+          <Monitor className="h-4 w-4" />
+          Desktop
+        </button>
+        <button type="button" onClick={() => setMode("auto")} className="inline-flex flex-col items-center text-[10px]">
+          <SlidersHorizontal className="h-4 w-4" />
+          Auto
+        </button>
+      </div>
+    </footer>
   );
 }
-

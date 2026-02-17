@@ -12,8 +12,8 @@ type ProjectPart = {
   id: string;
   name: string;
   partNumber: string;
-  quantityRequired: number;
-  quantityComplete: number;
+  machinist: string;
+  finisher: string;
 };
 
 type ProjectAdminItem = {
@@ -24,7 +24,26 @@ type ProjectAdminItem = {
   parts: ProjectPart[];
 };
 
-export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }) {
+type WorkspaceOptions = {
+  teamNumbers: string[];
+  seasonYears: string[];
+  robotNumbers: Array<{ teamNumber: string; seasonYear: string; robotNumber: string }>;
+  subsystems: Array<{
+    teamNumber: string;
+    seasonYear: string;
+    robotNumber: string;
+    subsystemNumber: string;
+    label: string | null;
+  }>;
+};
+
+export function ProjectAdminPanel({
+  projects,
+  config
+}: {
+  projects: ProjectAdminItem[];
+  config: WorkspaceOptions;
+}) {
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "");
   const [projectName, setProjectName] = useState("");
   const [projectSeason, setProjectSeason] = useState(String(new Date().getFullYear()));
@@ -34,7 +53,17 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
   const [rowFeedback, setRowFeedback] = useState<
     Record<string, { kind: "success" | "error"; text: string }>
   >({});
-  const [partEdits, setPartEdits] = useState<Record<string, { name: string; quantityRequired: string; quantityComplete: string }>>({});
+  const [partEdits, setPartEdits] = useState<Record<string, { name: string }>>({});
+  const [teamNumber, setTeamNumber] = useState("");
+  const [robotTeam, setRobotTeam] = useState(config.teamNumbers[0] ?? "");
+  const [robotYear, setRobotYear] = useState(config.seasonYears[0] ?? String(new Date().getFullYear()));
+  const [robotNumber, setRobotNumber] = useState("");
+  const [subsystemTeam, setSubsystemTeam] = useState(config.teamNumbers[0] ?? "");
+  const [subsystemYear, setSubsystemYear] = useState(config.seasonYears[0] ?? String(new Date().getFullYear()));
+  const [subsystemRobot, setSubsystemRobot] = useState("");
+  const [subsystemNumber, setSubsystemNumber] = useState("");
+  const [subsystemLabel, setSubsystemLabel] = useState("");
+  const [configMessage, setConfigMessage] = useState<string | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -63,13 +92,7 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
   }
 
   function editForPart(part: ProjectPart) {
-    return (
-      partEdits[part.id] ?? {
-        name: part.name,
-        quantityRequired: String(part.quantityRequired),
-        quantityComplete: String(part.quantityComplete)
-      }
-    );
+    return partEdits[part.id] ?? { name: part.name };
   }
 
   async function savePart(part: ProjectPart) {
@@ -84,9 +107,7 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: edit.name.trim(),
-        quantityRequired: Number.parseInt(edit.quantityRequired, 10) || 1,
-        quantityComplete: Number.parseInt(edit.quantityComplete, 10) || 0
+        name: edit.name.trim()
       })
     });
     const data = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -126,6 +147,24 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
       ...prev,
       [partId]: { kind: "success", text: "Deleted. Refresh list to clear row." }
     }));
+    setBusy(false);
+  }
+
+  async function addConfig(payload: Record<string, string>) {
+    setBusy(true);
+    setConfigMessage(null);
+    const response = await fetch("/api/admin/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) {
+      setConfigMessage(data?.error ?? "Unable to save config.");
+      setBusy(false);
+      return;
+    }
+    setConfigMessage("Saved. Refresh page to load updated dropdown options.");
     setBusy(false);
   }
 
@@ -169,6 +208,59 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
       </Card>
 
       <Card className="space-y-3">
+        <h2 className="text-lg font-semibold text-white">Part Numbering Admin</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
+            <p className="text-sm font-semibold text-white">Team Number</p>
+            <Input
+              value={teamNumber}
+              onChange={(event) => setTeamNumber(event.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="7028"
+            />
+            <Button disabled={busy || !teamNumber} onClick={() => addConfig({ kind: "TEAM", teamNumber })}>
+              Add Team
+            </Button>
+          </div>
+          <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
+            <p className="text-sm font-semibold text-white">Robot Number</p>
+            <Input value={robotTeam} onChange={(event) => setRobotTeam(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Team" />
+            <Input value={robotYear} onChange={(event) => setRobotYear(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Year" />
+            <Input value={robotNumber} onChange={(event) => setRobotNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="Robot" />
+            <Button
+              disabled={busy || !robotTeam || !robotYear || !robotNumber}
+              onClick={() => addConfig({ kind: "ROBOT", teamNumber: robotTeam, seasonYear: robotYear, robotNumber })}
+            >
+              Add Robot
+            </Button>
+          </div>
+          <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
+            <p className="text-sm font-semibold text-white">Subsystem</p>
+            <Input value={subsystemTeam} onChange={(event) => setSubsystemTeam(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Team" />
+            <Input value={subsystemYear} onChange={(event) => setSubsystemYear(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Year" />
+            <Input value={subsystemRobot} onChange={(event) => setSubsystemRobot(event.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="Robot" />
+            <Input value={subsystemNumber} onChange={(event) => setSubsystemNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="Subsystem" />
+            <Input value={subsystemLabel} onChange={(event) => setSubsystemLabel(event.target.value)} placeholder="Label (optional)" />
+            <Button
+              disabled={busy || !subsystemTeam || !subsystemYear || !subsystemRobot || !subsystemNumber}
+              onClick={() =>
+                addConfig({
+                  kind: "SUBSYSTEM",
+                  teamNumber: subsystemTeam,
+                  seasonYear: subsystemYear,
+                  robotNumber: subsystemRobot,
+                  subsystemNumber,
+                  label: subsystemLabel
+                })
+              }
+            >
+              Add Subsystem
+            </Button>
+          </div>
+        </div>
+        {configMessage ? <p className="text-sm text-steel-200">{configMessage}</p> : null}
+      </Card>
+
+      <Card className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-white">Part Administration</h2>
           <div className="w-64">
@@ -181,7 +273,17 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
             </Select>
           </div>
         </div>
-        <p className="text-sm text-steel-300">Quick edit names/quantities and remove parts. Destructive actions are immediate.</p>
+        <p className="text-sm text-steel-300">
+          Quick edit part names. Machinist and finisher are managed in each part settings page.
+        </p>
+        <div className="hidden text-xs text-steel-300 md:grid md:grid-cols-[1.6fr_1fr_1fr_auto_auto_1.6fr]">
+          <span>Name</span>
+          <span>Machinist</span>
+          <span>Finisher</span>
+          <span>Save</span>
+          <span>Delete</span>
+          <span>Feedback</span>
+        </div>
         <div className="space-y-2">
           {selectedProject?.parts.length ? (
             selectedProject.parts.map((part) => {
@@ -198,26 +300,8 @@ export function ProjectAdminPanel({ projects }: { projects: ProjectAdminItem[] }
                       }))
                     }
                   />
-                  <Input
-                    value={edit.quantityRequired}
-                    inputMode="numeric"
-                    onChange={(event) =>
-                      setPartEdits((prev) => ({
-                        ...prev,
-                        [part.id]: { ...edit, quantityRequired: event.target.value.replace(/\D/g, "") }
-                      }))
-                    }
-                  />
-                  <Input
-                    value={edit.quantityComplete}
-                    inputMode="numeric"
-                    onChange={(event) =>
-                      setPartEdits((prev) => ({
-                        ...prev,
-                        [part.id]: { ...edit, quantityComplete: event.target.value.replace(/\D/g, "") }
-                      }))
-                    }
-                  />
+                  <Input value={part.machinist} readOnly />
+                  <Input value={part.finisher} readOnly />
                   <Button variant="secondary" onClick={() => savePart(part)} disabled={busy}>
                     Save
                   </Button>

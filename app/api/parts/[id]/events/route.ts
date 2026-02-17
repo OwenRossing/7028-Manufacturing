@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jsonError, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { canManagePart } from "@/lib/permissions";
 
 export async function GET(
   request: NextRequest,
@@ -15,6 +16,9 @@ export async function GET(
   const part = await prisma.part.findUnique({ where: { id }, select: { id: true } });
   if (!part) {
     return jsonError("Part not found.", 404);
+  }
+  if (!(await canManagePart(userResult, id))) {
+    return jsonError("You do not have permission to view this part history.", 403);
   }
 
   const events = await prisma.partEvent.findMany({

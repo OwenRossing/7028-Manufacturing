@@ -1,11 +1,11 @@
-export const PART_NUMBER_REGEX = /^\d{4}-\d{4}-R\d+-\d{4}$/;
+export const PART_NUMBER_REGEX = /^\d{4}-\d{2,4}-\d{1,2}-\d{4}$/;
 
 export function isValidPartNumber(value: string): boolean {
   return PART_NUMBER_REGEX.test(value.trim());
 }
 
 export function partNumberHint(): string {
-  return "Format must be TEAM-YEAR-ROBOT-PARTCODE, e.g. 7028-2026-R1-1001.";
+  return "Format must be TEAM-YEAR-ROBOT-PARTCODE, e.g. 7028-26-1-4001.";
 }
 
 export function defaultTeamNumber(): string {
@@ -28,7 +28,7 @@ export function buildPartNumber(segments: {
 }): string {
   const team = segments.team.replace(/\D/g, "").slice(0, 4);
   const year = segments.year.replace(/\D/g, "").slice(0, 4);
-  const robot = segments.robot.replace(/\D/g, "");
+  const robot = segments.robot.replace(/\D/g, "").slice(0, 2);
   const partCode = segments.partCode.replace(/\D/g, "").slice(0, 4);
-  return `${team}-${year}-R${robot}-${partCode}`;
+  return `${team}-${year}-${robot}-${partCode}`;
 }

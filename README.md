@@ -10,7 +10,7 @@ Vertical-slice demo for manufactured part tracking in FRC robotics.
 
 ## Features in this demo
 
-- Demo sign in (`alex@team7028.org`, `riley@team7028.org`)
+- Google sign in only (`@stmarobotics.org` accounts)
 - Table-first parts explorer with search and status filters
 - Part detail with:
   - status transitions (`DESIGNED -> CUT -> MACHINED -> ASSEMBLED -> VERIFIED -> DONE`)
@@ -21,6 +21,7 @@ Vertical-slice demo for manufactured part tracking in FRC robotics.
 - BOM CSV import:
   - preview (`CREATE`, `UPDATE`, `NO_CHANGE`, `ERROR`)
   - commit with idempotency support
+  - filter by team/year/robot prefix (for example `7028-2026-R1`)
 
 ## Quick Start (Docker Desktop)
 
@@ -32,9 +33,7 @@ docker compose up --build
 ```
 
 3. Open `http://localhost:3000`.
-4. Sign in with a seeded email:
-   - `alex@team7028.org`
-   - `riley@team7028.org`
+4. Sign in with a Google account under `@stmarobotics.org`.
 
 ## Faster UI Development on Windows
 
@@ -77,7 +76,8 @@ The container startup command automatically runs:
 
 ## API Highlights
 
-- `POST /api/auth/demo-login`
+- `POST /api/auth/google`
+- `POST /api/auth/logout`
 - `GET|POST /api/parts`
 - `GET|PATCH /api/parts/:id`
 - `POST /api/parts/:id/status`
@@ -90,6 +90,30 @@ The container startup command automatically runs:
 
 ## Future-ready seams already present
 
-- Auth boundary supports replacing demo login with Google OAuth.
 - BOM provider abstraction allows Onshape API provider later.
 - Image processing provider can be introduced for background removal later.
+
+## Production Configuration
+
+Set these in your deployment environment:
+
+- `DATABASE_URL`
+- `GOOGLE_CLIENT_ID`
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+- `DEMO_SESSION_COOKIE` (optional custom cookie name)
+- `SESSION_TTL_SECONDS` (optional, defaults to 14 days)
+- `MAX_UPLOAD_MB`
+- `ADMIN_EMAILS` (comma-separated admin account emails)
+
+Google auth notes:
+
+- Create OAuth client credentials in Google Cloud.
+- Set authorized JavaScript origins to your app URL.
+- Use the same client id for `GOOGLE_CLIENT_ID` and `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+- Authentication is restricted to `@stmarobotics.org` emails.
+
+Admin account model:
+
+- Users are auto-created at first Google sign-in.
+- Admin rights are granted by email via `ADMIN_EMAILS` and can be managed in-app from Settings -> Admin Accounts.
+- Example: `ADMIN_EMAILS="coach@team7028.org,lead@team7028.org"`.

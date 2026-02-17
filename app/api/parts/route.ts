@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
 import { isAdminUser } from "@/lib/permissions";
+import { getPartThumbnailMap } from "@/lib/part-thumbnails";
 
 const createSchema = z.object({
   projectId: z.string().min(1),
@@ -90,12 +91,16 @@ export async function GET(request: NextRequest) {
     }),
     prisma.part.count({ where })
   ]);
+  const thumbMap = await getPartThumbnailMap(parts.map((part) => part.id));
 
   return NextResponse.json({
     total,
     page,
     pageSize,
-    items: parts
+    items: parts.map((part) => ({
+      ...part,
+      thumbnailStorageKey: thumbMap.get(part.id) ?? null
+    }))
   });
 }
 
@@ -116,46 +121,54 @@ export async function POST(request: NextRequest) {
     (id) => id !== effectivePrimaryOwnerId
   );
 
-  const created = await prisma.part.create({
-    data: {
-      projectId: parsed.data.projectId,
-      partNumber: parsed.data.partNumber,
-      name: parsed.data.name,
-      description: parsed.data.description,
-      status: PartStatus.DESIGNED,
-      quantityRequired: parsed.data.quantityRequired,
-      quantityComplete: parsed.data.quantityComplete,
-      priority: parsed.data.priority,
-      owners:
-        effectivePrimaryOwnerId || collaboratorIds.length
-          ? {
-              create: [
-                ...(effectivePrimaryOwnerId
-                  ? [{ userId: effectivePrimaryOwnerId, role: PartOwnerRole.PRIMARY }]
-                  : []),
-                ...collaboratorIds.map((userId) => ({
-                  userId,
-                  role: PartOwnerRole.COLLABORATOR
-                }))
-              ]
+  let created;
+  try {
+    created = await prisma.part.create({
+      data: {
+        projectId: parsed.data.projectId,
+        partNumber: parsed.data.partNumber,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        status: PartStatus.DESIGNED,
+        quantityRequired: parsed.data.quantityRequired,
+        quantityComplete: parsed.data.quantityComplete,
+        priority: parsed.data.priority,
+        owners:
+          effectivePrimaryOwnerId || collaboratorIds.length
+            ? {
+                create: [
+                  ...(effectivePrimaryOwnerId
+                    ? [{ userId: effectivePrimaryOwnerId, role: PartOwnerRole.PRIMARY }]
+                    : []),
+                  ...collaboratorIds.map((userId) => ({
+                    userId,
+                    role: PartOwnerRole.COLLABORATOR
+                  }))
+                ]
+              }
+            : undefined,
+        events: {
+          create: {
+            actorUserId: userResult,
+            eventType: PartEventType.CREATED,
+            payloadJson: {
+              source: "manual-wizard",
+              editor: { isOwnerEditor: true, isAdminEditor: isAdmin }
             }
-          : undefined,
-      events: {
-        create: {
-          actorUserId: userResult,
-          eventType: PartEventType.CREATED,
-          payloadJson: {
-            source: "manual-wizard",
-            editor: { isOwnerEditor: true, isAdminEditor: isAdmin }
           }
         }
+      },
+      include: {
+        owners: { include: { user: true }, orderBy: { role: "asc" } },
+        photos: { orderBy: { createdAt: "desc" }, take: 1 }
       }
-    },
-    include: {
-      owners: { include: { user: true }, orderBy: { role: "asc" } },
-      photos: { orderBy: { createdAt: "desc" }, take: 1 }
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return jsonError("That Part ID already exists in this project.", 409);
     }
-  });
+    throw error;
+  }
 
   return NextResponse.json(created, { status: 201 });
 }

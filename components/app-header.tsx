@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AddPartControl } from "@/components/add-part-control";
 
 type ProjectOption = {
   id: string;
@@ -15,16 +16,18 @@ type ProjectOption = {
 };
 
 type AppHeaderProps = {
-  userName: string | null;
   projects: ProjectOption[];
+  completed: number;
+  total: number;
 };
 
-export function AppHeader({ userName, projects }: AppHeaderProps) {
+export function AppHeader({ projects, completed, total }: AppHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const paramsString = searchParams.toString();
   const params = useMemo(() => new URLSearchParams(paramsString), [paramsString]);
+  const activeTab = params.get("tab");
   const [projectOpen, setProjectOpen] = useState(false);
   const projectRef = useRef<HTMLDivElement | null>(null);
   const activeProjectId = params.get("projectId");
@@ -60,8 +63,25 @@ export function AppHeader({ userName, projects }: AppHeaderProps) {
     return "text-[#ff6b6b]";
   }
 
-  const homeActive = pathname === "/" || pathname.startsWith("/parts") || pathname.startsWith("/import");
+  const isOverviewTab = activeTab === "overview" || activeTab === "community";
+  const homeActive =
+    (pathname === "/" && !isOverviewTab) ||
+    pathname.startsWith("/parts") ||
+    pathname.startsWith("/import");
+  const overviewActive = pathname === "/" && isOverviewTab;
   const accountActive = pathname.startsWith("/settings") || pathname.startsWith("/projects");
+
+  const homeHref = useMemo(() => {
+    const next = new URLSearchParams(paramsString);
+    next.delete("tab");
+    return next.toString() ? `/?${next.toString()}` : "/";
+  }, [paramsString]);
+
+  const overviewHref = useMemo(() => {
+    const next = new URLSearchParams(paramsString);
+    next.set("tab", "overview");
+    return `/?${next.toString()}`;
+  }, [paramsString]);
 
   function topTabClass(active: boolean): string {
     return [
@@ -75,12 +95,14 @@ export function AppHeader({ userName, projects }: AppHeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 bg-[#171d25]">
+      <div className="border-b border-[#233246] px-3 py-0.5 text-center text-[11px] text-[#8fa0b2] lg:hidden">
+        {completed} of {total} complete
+      </div>
       <div className="flex flex-wrap items-center gap-3 px-4 py-2">
         <div className="flex items-center gap-5 text-[30px] font-bold tracking-wide text-steel-100">
-          <Link href="/" className={topTabClass(homeActive)}>HOME</Link>
-          <Link href="/settings" className={topTabClass(accountActive)}>
-            {userName ?? "ACCOUNT"}
-          </Link>
+          <Link href={homeHref} className={topTabClass(homeActive)}>HOME</Link>
+          <Link href={overviewHref} className={topTabClass(overviewActive)}>OVERVIEW</Link>
+          <Link href="/settings" className={topTabClass(accountActive)}>ACCOUNT</Link>
         </div>
 
         <div className="relative ml-auto" ref={projectRef}>
@@ -123,6 +145,7 @@ export function AppHeader({ userName, projects }: AppHeaderProps) {
             </div>
           ) : null}
         </div>
+        <AddPartControl className="inline-flex h-10 items-center gap-2 rounded-[3px] border border-[#2f6eb6] bg-[#1a9fff] px-3 text-sm font-semibold text-white hover:bg-[#3aaeff]" />
       </div>
     </header>
   );

@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { getUserIdFromCookieStore } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Providers } from "@/components/providers";
-import { AppHeader } from "@/components/app-header";
 import { PartStatus } from "@prisma/client";
-import { AppBottomBar } from "@/components/app-bottom-bar";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "FRC Parts Tracker Demo",
@@ -17,11 +15,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const userId = await getUserIdFromCookieStore();
-  const [user, projects, partCounts] = await Promise.all([
-    userId
-      ? prisma.user.findUnique({ where: { id: userId }, select: { id: true, displayName: true } })
-      : Promise.resolve(null),
+  const [projects, partCounts] = await Promise.all([
     prisma.project.findMany({
       select: { id: true, name: true },
       orderBy: { createdAt: "desc" },
@@ -64,12 +58,9 @@ export default async function RootLayout({
       <body>
         <Providers>
           <div className="min-h-screen bg-[#1b2838] text-white">
-            <AppHeader
-              userName={user?.displayName ?? null}
-              projects={projectsWithHealth}
-            />
-            <main className="w-full pb-12">{children}</main>
-            <AppBottomBar completed={completedParts} total={totalParts} />
+            <AppShell projects={projectsWithHealth} completed={completedParts} total={totalParts}>
+              {children}
+            </AppShell>
           </div>
         </Providers>
       </body>

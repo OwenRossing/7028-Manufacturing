@@ -5,11 +5,12 @@ import { jsonError, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { NoopImageProcessingProvider } from "@/lib/image/provider";
 import { deleteUpload, saveUpload } from "@/lib/storage";
+import { canManagePart } from "@/lib/permissions";
+import { getPartThumbnail, setPartThumbnail } from "@/lib/part-thumbnails";
 
 export const runtime = "nodejs";
 
 const MAX_UPLOAD_BYTES = Number.parseInt(process.env.MAX_UPLOAD_MB ?? "10", 10) * 1024 * 1024;
-const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const imageProcessor = new NoopImageProcessingProvider();
 
 export async function POST(
@@ -26,14 +27,17 @@ export async function POST(
   if (!part) {
     return jsonError("Part not found.", 404);
   }
+  if (!(await canManagePart(userResult, id))) {
+    return jsonError("You do not have permission to upload media for this part.", 403);
+  }
 
   const formData = await request.formData();
   const file = formData.get("file");
   if (!(file instanceof File)) {
     return jsonError("Missing image file.", 400);
   }
-  if (!ALLOWED_MIME.has(file.type)) {
-    return jsonError("Unsupported file type. Use JPEG/PNG/WEBP.", 400);
+  if (!(file.type.startsWith("image/") || file.type.startsWith("video/"))) {
+    return jsonError("Unsupported file type. Use any image or video format.", 400);
   }
   if (file.size > MAX_UPLOAD_BYTES) {
     return jsonError(`File too large. Max ${process.env.MAX_UPLOAD_MB ?? "10"} MB.`, 400);
@@ -67,6 +71,10 @@ export async function POST(
       uploadedById: userResult
     }
   });
+  const existingThumb = await getPartThumbnail(id);
+  if (!existingThumb) {
+    await setPartThumbnail(id, photo.storageKey);
+  }
 
   const updatedPart = await prisma.part.findUnique({
     where: { id },
@@ -80,6 +88,7 @@ export async function POST(
     photo: {
       id: photo.id,
       storageKey: photo.storageKey,
+      mimeType: photo.mimeType,
       publicPath: saved.publicPath
     },
     part: updatedPart
@@ -100,6 +109,9 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  if (!(await canManagePart(userResult, id))) {
+    return jsonError("You do not have permission to delete media for this part.", 403);
+  }
   const payload = await request.json().catch(() => null);
   const parsed = deleteSchema.safeParse(payload);
   if (!parsed.success) {
@@ -114,7 +126,16 @@ export async function DELETE(
     return jsonError("Photo not found.", 404);
   }
 
+  const currentThumb = await getPartThumbnail(id);
   await prisma.partPhoto.delete({ where: { id: photo.id } });
+  if (currentThumb === photo.storageKey) {
+    const fallback = await prisma.partPhoto.findFirst({
+      where: { partId: id },
+      orderBy: { createdAt: "desc" },
+      select: { storageKey: true }
+    });
+    await setPartThumbnail(id, fallback?.storageKey ?? null);
+  }
   await deleteUpload(photo.storageKey);
   return NextResponse.json({ success: true });
 }

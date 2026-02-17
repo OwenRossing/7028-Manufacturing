@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
-import { editorContext } from "@/lib/permissions";
+import { canManagePart, editorContext } from "@/lib/permissions";
 
 const schema = z.object({
   primaryOwnerId: z.string().nullable(),
@@ -29,6 +29,9 @@ export async function POST(
   if (!part) {
     return jsonError("Part not found.", 404);
   }
+  if (!(await canManagePart(userResult, id))) {
+    return jsonError("You do not have permission to manage roles for this part.", 403);
+  }
   const context = await editorContext(userResult, id);
 
   const collaboratorIds = [...new Set(parsed.data.collaboratorIds)];
@@ -37,7 +40,7 @@ export async function POST(
     parsed.data.primaryOwnerId &&
     collaboratorIds.includes(parsed.data.primaryOwnerId)
   ) {
-    return jsonError("Primary assignee cannot also be listed as an additional assignee.", 400);
+    return jsonError("Machinist cannot also be listed as a finisher.", 400);
   }
 
   const updatedPart = await prisma.$transaction(async (tx) => {

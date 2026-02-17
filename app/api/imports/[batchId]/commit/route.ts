@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jsonError, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { getIdempotentResponse, storeIdempotentResponse } from "@/lib/idempotency";
+import { isAdminUser } from "@/lib/permissions";
 
 export async function POST(
   request: NextRequest,
@@ -11,6 +12,9 @@ export async function POST(
   const userResult = requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
+  }
+  if (!(await isAdminUser(userResult))) {
+    return jsonError("Admin access required for BOM commit.", 403);
   }
 
   const { batchId } = await params;

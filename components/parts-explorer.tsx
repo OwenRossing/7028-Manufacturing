@@ -4,7 +4,7 @@ import { PartStatus } from "@prisma/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, ChevronDown, X, Settings, ArrowUp } from "lucide-react";
+import { Search, ChevronDown, X, Settings, ArrowLeft } from "lucide-react";
 import {
   canonicalStatusForStage,
   stageLabel,
@@ -21,15 +21,23 @@ type PartsResponse = {
   pageSize: number;
 };
 
-type DiscussionMessage = {
+type NoteMessage = {
   id: string;
-  author: string;
   text: string;
   createdAt: string;
 };
+type DetailPhoto = {
+  id: string;
+  storageKey: string;
+  mimeType?: string;
+};
+type PreviewMedia = {
+  storageKey: string;
+  mimeType?: string;
+};
 
 type PriorityTier = "ASAP" | "NORMAL" | "BACKBURNER";
-type MainView = "HOME" | "STAGE" | "DETAIL";
+type MainView = "HOME" | "STAGE" | "DETAIL" | "OVERVIEW";
 type SubsystemKey = string;
 
 function stageCollectionLabel(stage: WorkflowStage): string {
@@ -37,9 +45,10 @@ function stageCollectionLabel(stage: WorkflowStage): string {
 }
 
 function stageCollectionSort(stage: WorkflowStage): number {
-  if (stage === "NOT_STARTED") return 0;
-  if (stage === "MACHINED") return 1;
-  return 2;
+  if (stage === "UNASSIGNED") return 0;
+  if (stage === "ASSIGNED") return 1;
+  if (stage === "MACHINED") return 2;
+  return 3;
 }
 
 function priorityTier(priority: number): PriorityTier {
@@ -101,7 +110,12 @@ function subsystemLabel(key: SubsystemKey): string {
   return `Subsystem ${value}`;
 }
 
-function assigneeSummary(part: PartListItem): string {
+function isVideoStorageKey(storageKey: string | null | undefined): boolean {
+  if (!storageKey) return false;
+  return /\.(mp4|webm|ogg|mov|m4v|avi)$/i.test(storageKey);
+}
+
+function crewSummary(part: PartListItem): string {
   const names = part.owners.map((owner) => owner.user.displayName);
   if (!names.length) return "Unassigned";
   if (names.length <= 2) return names.join(", ");
@@ -110,18 +124,22 @@ function assigneeSummary(part: PartListItem): string {
 
 export function PartsExplorer({ currentUserId }: { currentUserId: string | null }) {
   const detailScrollRef = useRef<HTMLDivElement | null>(null);
+  const installBarRef = useRef<HTMLDivElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId");
+  const activeTab = searchParams.get("tab");
   const search = (searchParams.get("q") ?? "").trim().toLowerCase();
 
   const [view, setView] = useState<MainView>("HOME");
-  const [activeStage, setActiveStage] = useState<WorkflowStage>("NOT_STARTED");
+  const [activeStage, setActiveStage] = useState<WorkflowStage>("ASSIGNED");
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [stageOpen, setStageOpen] = useState<Record<WorkflowStage, boolean>>({
     COMPLETED: true,
     MACHINED: true,
-    NOT_STARTED: true
+    ASSIGNED: true,
+    UNASSIGNED: true
   });
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [leftSearch, setLeftSearch] = useState("");
@@ -140,9 +158,15 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const [editPriority, setEditPriority] = useState(3);
   const [editQtyRequired, setEditQtyRequired] = useState("1");
   const [editQtyComplete, setEditQtyComplete] = useState("0");
-  const [discussionInput, setDiscussionInput] = useState("");
-  const [discussionMessages, setDiscussionMessages] = useState<DiscussionMessage[]>([]);
+  const [noteInput, setNoteInput] = useState("");
+  const [noteMessages, setNoteMessages] = useState<NoteMessage[]>([]);
   const [feedback, setFeedback] = useState<{ kind: "error" | "warning"; text: string } | null>(null);
+  const [detailPhotos, setDetailPhotos] = useState<DetailPhoto[]>([]);
+  const [uiMode, setUiMode] = useState<"auto" | "mobile" | "desktop">("auto");
+  const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(1440);
+  const [mobilePane, setMobilePane] = useState<"LIST" | "DETAIL">("LIST");
+  const touchStartXRef = useRef<number | null>(null);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -189,12 +213,20 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       setShowCompactDetailHeader(false);
       return;
     }
-    const node = detailScrollRef.current;
-    if (!node) return;
-    const onScroll = () => setShowCompactDetailHeader(node.scrollTop > 220);
-    onScroll();
-    node.addEventListener("scroll", onScroll, { passive: true });
-    return () => node.removeEventListener("scroll", onScroll);
+    const root = detailScrollRef.current;
+    const target = installBarRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        // Show the compact header only after the install/stage bar leaves view.
+        setShowCompactDetailHeader(!entry.isIntersecting || entry.intersectionRatio < 0.98);
+      },
+      { root, threshold: [0, 0.5, 0.98, 1] }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
   }, [view, selectedPartId, detailPanel]);
 
   useEffect(() => {
@@ -207,6 +239,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     const timer = window.setTimeout(() => setFeedback(null), 2300);
     return () => window.clearTimeout(timer);
   }, [feedback]);
+
+  useEffect(() => {
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewMedia(null);
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, []);
 
   const effectiveSearch = `${search} ${leftSearch}`.trim();
   const visibleItems = useMemo(() => {
@@ -240,6 +280,17 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       ? selectedCollaborators.join(", ")
       : `${selectedCollaborators.slice(0, 2).join(", ")} +${selectedCollaborators.length - 2}`
     : "None";
+  const selectedFinisherName = selectedCollaborators[0] ?? "Unassigned";
+
+  const stageForItem = (part: PartListItem): WorkflowStage => statusToStage(part.status, part.owners.length > 0);
+
+  useEffect(() => {
+    if (activeTab === "overview" || activeTab === "community") {
+      setView("OVERVIEW");
+      return;
+    }
+    setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));
+  }, [activeTab]);
 
   useEffect(() => {
     if (!selectedPartId && sorted.length) {
@@ -256,6 +307,79 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   }, [selectedPartId, view]);
 
   useEffect(() => {
+    function applyMode(mode: "auto" | "mobile" | "desktop") {
+      setUiMode(mode);
+    }
+
+    try {
+      const stored = window.localStorage.getItem("ui-mode");
+      if (stored === "mobile" || stored === "desktop" || stored === "auto") {
+        applyMode(stored);
+      }
+    } catch {
+      applyMode("auto");
+    }
+
+    const onMode = (event: Event) => {
+      const detail = (event as CustomEvent<"auto" | "mobile" | "desktop">).detail;
+      if (detail === "mobile" || detail === "desktop" || detail === "auto") applyMode(detail);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "ui-mode") return;
+      const value = event.newValue;
+      if (value === "mobile" || value === "desktop" || value === "auto") applyMode(value);
+    };
+    window.addEventListener("ui-mode-change", onMode as EventListener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("ui-mode-change", onMode as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    const apply = () => setViewportWidth(window.innerWidth);
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const isMobile = uiMode === "mobile" || (uiMode === "auto" && viewportWidth < 1024);
+      if (isMobile) {
+        setMobilePane("LIST");
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [uiMode, viewportWidth]);
+
+  useEffect(() => {
+    if (!selectedPartId) {
+      setDetailPhotos([]);
+      return;
+    }
+    let active = true;
+    void fetch(`/api/parts/${selectedPartId}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load photos.");
+        return (await response.json()) as { photos?: DetailPhoto[] };
+      })
+      .then((data) => {
+        if (!active) return;
+        setDetailPhotos(data.photos ?? []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setDetailPhotos([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedPartId]);
+
+  useEffect(() => {
     if (!selectedPart) return;
     setEditName(selectedPart.name);
     setEditPartNumber(selectedPart.partNumber);
@@ -266,19 +390,21 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
 
   useEffect(() => {
     if (!selectedPartId) {
-      setDiscussionMessages([]);
+      setNoteMessages([]);
       return;
     }
     try {
-      const raw = window.localStorage.getItem(`part-discussion-${selectedPartId}`);
+      const raw =
+        window.localStorage.getItem(`part-notes-${selectedPartId}`) ??
+        window.localStorage.getItem(`part-discussion-${selectedPartId}`);
       if (!raw) {
-        setDiscussionMessages([]);
+        setNoteMessages([]);
         return;
       }
-      const parsed = JSON.parse(raw) as DiscussionMessage[];
-      setDiscussionMessages(Array.isArray(parsed) ? parsed : []);
+      const parsed = JSON.parse(raw) as NoteMessage[];
+      setNoteMessages(Array.isArray(parsed) ? parsed : []);
     } catch {
-      setDiscussionMessages([]);
+      setNoteMessages([]);
     }
   }, [selectedPartId]);
 
@@ -386,52 +512,174 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     onError: (error: Error) => setFeedback({ kind: "error", text: error.message || "Unable to update quantity." })
   });
 
-  function postDiscussionMessage() {
+  const uploadPhotoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!selectedPart) throw new Error("No part selected.");
+      const formData = new FormData();
+      formData.set("file", file);
+      const response = await fetch(`/api/parts/${selectedPart.id}/photos`, { method: "POST", body: formData });
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string; photo?: { id: string; storageKey: string; mimeType?: string } }
+        | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to upload file.");
+      return data?.photo ?? null;
+    },
+    onMutate: () => setFeedback(null),
+    onSuccess: (photo) => {
+      if (photo) {
+        setDetailPhotos((prev) => [{ id: photo.id, storageKey: photo.storageKey, mimeType: photo.mimeType }, ...prev]);
+        if (selectedPart && !photoForPart(selectedPart)) setThumbnail(selectedPart.id, photo.storageKey);
+      }
+      setFeedback({ kind: "warning", text: "File uploaded." });
+      void queryClient.invalidateQueries({ queryKey: ["parts", queryString] });
+    },
+    onError: (error: Error) => setFeedback({ kind: "error", text: error.message || "Unable to upload file." })
+  });
+
+  function requestStageMove(partId: string, toStatus: PartStatus, targetStage?: WorkflowStage) {
+    const item = liveItems.find((part) => part.id === partId);
+    if (!item) return;
+    if (targetStage === "UNASSIGNED" && item.owners.length > 0) {
+      setFeedback({ kind: "warning", text: "Clear machinist/finisher in settings before moving to Unassigned." });
+      return;
+    }
+    if (targetStage === "ASSIGNED" && item.owners.length === 0) {
+      setFeedback({ kind: "warning", text: "Assign a machinist before moving to Assigned." });
+      return;
+    }
+    if (item.status === toStatus) return;
+    const goingCompleted = statusToStage(toStatus) === "COMPLETED";
+    if (goingCompleted && item.photos.length === 0) {
+      setFeedback({ kind: "warning", text: "Upload a photo before marking this part completed." });
+      return;
+    }
+    moveMutation.mutate({ partId, toStatus });
+  }
+
+  function photoForPart(part: PartListItem | null): string | null {
+    if (!part) return null;
+    return part.thumbnailStorageKey ?? part.photos[0]?.storageKey ?? null;
+  }
+
+  async function setThumbnail(partId: string, storageKey: string) {
+    setFeedback(null);
+    const response = await fetch(`/api/parts/${partId}/thumbnail`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storageKey })
+    });
+    const data = (await response.json().catch(() => null)) as
+      | { error?: string; storageKey?: string | null }
+      | null;
+    if (!response.ok) {
+      setFeedback({ kind: "error", text: data?.error ?? "Unable to set thumbnail." });
+      return;
+    }
+    setLiveItems((prev) =>
+      prev.map((item) =>
+        item.id === partId
+            ? {
+                ...item,
+                thumbnailStorageKey: data?.storageKey ?? storageKey
+              }
+            : item
+      )
+    );
+    setFeedback({ kind: "warning", text: "Thumbnail updated." });
+    void queryClient.invalidateQueries({ queryKey: ["parts", queryString] });
+  }
+
+  function isVideoPhoto(photo: DetailPhoto): boolean {
+    return Boolean(photo.mimeType?.startsWith("video/")) || isVideoStorageKey(photo.storageKey);
+  }
+
+  function isVideoPreview(media: PreviewMedia | null): boolean {
+    if (!media) return false;
+    return Boolean(media.mimeType?.startsWith("video/")) || isVideoStorageKey(media.storageKey);
+  }
+
+  function openMediaPreview(photo: DetailPhoto) {
+    setPreviewMedia({ storageKey: photo.storageKey, mimeType: photo.mimeType });
+  }
+
+  function shellLayoutClass(): string {
+    if (uiMode === "mobile") return "grid-cols-1 grid-rows-[1fr]";
+    if (uiMode === "desktop") return "grid-cols-[392px_1fr] grid-rows-1";
+    return "grid-cols-1 grid-rows-[1fr] lg:grid-cols-[392px_1fr] lg:grid-rows-1";
+  }
+
+  function openPartDetail(partId: string) {
+    setSelectedPartId(partId);
+    setView("DETAIL");
+    setDetailPanel("main");
+    if (mobileActive) {
+      setMobilePane("DETAIL");
+      window.history.pushState({ mobileDetail: true }, "");
+    }
+  }
+
+  function closeMobileDetail() {
+    setMobilePane("LIST");
+  }
+
+  function postNoteMessage() {
     if (!selectedPartId) return;
-    const text = discussionInput.trim();
+    const text = noteInput.trim();
     if (!text) return;
-    const message: DiscussionMessage = {
-      id: crypto.randomUUID(),
-      author: "You",
-      text,
-      createdAt: new Date().toISOString()
-    };
-    const next = [...discussionMessages, message];
-    setDiscussionMessages(next);
-    setDiscussionInput("");
+    const message: NoteMessage = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
+    const next = [...noteMessages, message];
+    setNoteMessages(next);
+    setNoteInput("");
     try {
-      window.localStorage.setItem(`part-discussion-${selectedPartId}`, JSON.stringify(next));
+      window.localStorage.setItem(`part-notes-${selectedPartId}`, JSON.stringify(next));
     } catch {
-      setFeedback({ kind: "warning", text: "Message sent for this session only." });
+      setFeedback({ kind: "warning", text: "Note added for this session only." });
     }
   }
 
   const byStage = useMemo(() => {
     const grouped: Record<WorkflowStage, PartListItem[]> = {
-      NOT_STARTED: [],
+      UNASSIGNED: [],
+      ASSIGNED: [],
       MACHINED: [],
       COMPLETED: []
     };
     for (const part of sorted) {
-      grouped[statusToStage(part.status)].push(part);
+      grouped[stageForItem(part)].push(part);
     }
     return grouped;
   }, [sorted]);
 
-  const whatsNew = sorted.slice(0, 3);
+  const mostImportant = sorted.slice(0, 3);
   const myParts = (currentUserId
     ? sorted.filter((part) => part.owners.some((owner) => owner.userId === currentUserId))
     : sorted
   ).slice(0, 10);
 
   const stageItems = useMemo(
-    () => sorted.filter((part) => statusToStage(part.status) === activeStage),
+    () => sorted.filter((part) => stageForItem(part) === activeStage),
     [sorted, activeStage]
   );
+  const mobileActive = uiMode === "mobile" || (uiMode === "auto" && viewportWidth < 1024);
+  const communityLeaderboard = useMemo(() => {
+    const counts = new Map<string, { total: number; completed: number }>();
+    for (const part of sorted) {
+      for (const owner of part.owners) {
+        const existing = counts.get(owner.user.displayName) ?? { total: 0, completed: 0 };
+        existing.total += 1;
+        if (stageForItem(part) === "COMPLETED") existing.completed += 1;
+        counts.set(owner.user.displayName, existing);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => b.completed - a.completed || b.total - a.total || a.name.localeCompare(b.name))
+      .slice(0, 12);
+  }, [sorted]);
 
   return (
-    <section className="grid h-[calc(100dvh-104px)] grid-cols-1 overflow-hidden lg:grid-cols-[392px_1fr]">
-      <aside className="flex h-full flex-col border-r border-[#0e141b] bg-[#24282f]">
+    <section className={`grid h-[calc(100dvh-104px)] min-h-0 overflow-hidden ${shellLayoutClass()}`}>
+      <aside className="flex h-full min-h-0 flex-col border-r border-[#0e141b] bg-[#24282f]">
         <div className="bg-[#171d25] px-2 pb-3 pt-2">
           <button
             type="button"
@@ -448,7 +696,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                 onClick={() => setTypeMenuOpen((prev) => !prev)}
                 className="inline-flex h-11 items-center justify-between rounded-[3px] bg-[#25272d] px-3 text-left text-[15px] font-normal text-[#c7d5e0]"
               >
-                <span>Parts and Filters</span>
+                <span>Filters</span>
                 <ChevronDown className="h-4 w-4 text-[#8f98a0]" />
               </button>
             </div>
@@ -560,7 +808,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
           ) : null}
         </div>
 
-        <div className="flex-1 overflow-y-auto pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto pb-3">
           {[...STAGE_ORDER].sort((a, b) => stageCollectionSort(a) - stageCollectionSort(b)).map((stage) => {
             const items = byStage[stage];
             const stageActive = view === "STAGE" && activeStage === stage;
@@ -576,7 +824,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                 onDrop={(event) => {
                   const partId = event.dataTransfer.getData("text/plain");
                   if (!partId) return;
-                  moveMutation.mutate({ partId, toStatus: canonicalStatusForStage(stage) });
+                    requestStageMove(partId, canonicalStatusForStage(stage), stage);
                 }}
               >
                 <div className={`flex items-center bg-gradient-to-r from-[#243850]/30 via-[#1f3046]/42 to-[#24282f] ${stageActive ? "text-[#cae4fb]" : "text-[#cae4fb]"}`}>
@@ -622,14 +870,21 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     >
                       <span className="h-4 w-4 overflow-hidden bg-[#2a475e]">
                         {part.photos[0] ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
+                          isVideoStorageKey(part.photos[0].storageKey) ? (
+                            <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-[#9fb0c2]">V</div>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
+                          )
                         ) : null}
                       </span>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <span className={`line-clamp-1 block text-[15px] leading-tight ${priorityNameClass(part.priority)}`}>{part.name}</span>
                         <span className="line-clamp-1 block text-[11px] text-[#7f8ea0]">{part.partNumber}</span>
                       </div>
+                      <span className="rounded-full border border-white/20 bg-black/35 px-2 py-0.5 text-[10px] text-[#d6e4f2]">
+                        {part.quantityComplete}/{part.quantityRequired}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -639,7 +894,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         </div>
       </aside>
 
-      <div className="h-full overflow-hidden bg-steel-850">
+      <div className="h-full min-h-0 overflow-hidden bg-steel-850">
         {feedback ? (
           <div className="pointer-events-none fixed right-4 top-[62px] z-[60]">
             <div
@@ -662,8 +917,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
           <div className="h-full space-y-5 overflow-y-auto p-4">
             <section>
               <h2 className="mb-2 text-3xl font-semibold text-steel-100">Most Important</h2>
-              <div className="grid gap-3 xl:grid-cols-3">
-                {whatsNew.map((part) => (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {mostImportant.map((part) => (
                   <button
                     key={part.id}
                     type="button"
@@ -672,56 +927,50 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       setView("DETAIL");
                       setDetailPanel("main");
                     }}
-                    className={`overflow-hidden border text-left ${priorityClass(part.priority)}`}
+                    className={`relative h-[184px] overflow-hidden border text-left ${priorityClass(part.priority)}`}
                   >
-                    <div className="relative h-40">
-                      {part.photos[0] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full bg-steel-800" />
-                      )}
-                    </div>
-                    <div className="space-y-1 p-3">
-                      <p className="line-clamp-1 text-xl font-semibold text-white">{part.name}</p>
-                      <p className="line-clamp-1 text-sm text-steel-300">{part.partNumber}</p>
-                      <p className="line-clamp-1 text-sm text-steel-300">Assignees: {assigneeSummary(part)}</p>
-                      <p className="text-sm text-steel-300">
-                        Stage: {stageLabel(statusToStage(part.status))} | Qty {part.quantityComplete}/{part.quantityRequired}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {!whatsNew.length ? <p className="text-sm text-steel-300">No parts to show in Most Important yet.</p> : null}
-            </section>
-
-            <section>
-              <h3 className="mb-2 text-3xl font-semibold text-steel-100">My Parts</h3>
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {myParts.map((part, index) => (
-                  <button
-                    key={part.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedPartId(part.id);
-                      setView("DETAIL");
-                      setDetailPanel("main");
-                    }}
-                    className={`relative overflow-hidden border text-left ${priorityClass(part.priority)} ${
-                      index === 0 ? "h-[202px] min-w-[414px]" : "h-[202px] min-w-[180px]"
-                    }`}
-                  >
-                    {part.photos[0] ? (
+                    {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
                     ) : (
                       <div className="h-full w-full bg-steel-800" />
                     )}
-                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.82))] p-3">
-                      <p className="line-clamp-1 text-base font-semibold text-white">{part.name}</p>
+                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.86))] p-2">
+                      <p className="line-clamp-1 text-sm font-semibold text-white">{part.name}</p>
                       <p className="line-clamp-1 text-xs text-steel-300">{part.partNumber}</p>
-                      <p className="line-clamp-1 text-xs text-steel-300">{assigneeSummary(part)}</p>
+                      <p className="line-clamp-1 text-xs text-steel-300">Crew: {crewSummary(part)}</p>
+                      <p className="text-xs text-steel-200">Qty {part.quantityComplete}/{part.quantityRequired}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {!mostImportant.length ? <p className="text-sm text-steel-300">No parts to show in Most Important yet.</p> : null}
+            </section>
+
+            <section>
+              <h3 className="mb-2 text-3xl font-semibold text-steel-100">My Parts</h3>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                {myParts.map((part) => (
+                  <button
+                    key={part.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPartId(part.id);
+                      setView("DETAIL");
+                      setDetailPanel("main");
+                    }}
+                    className={`relative h-[184px] overflow-hidden border text-left ${priorityClass(part.priority)}`}
+                  >
+                    {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full bg-steel-800" />
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.86))] p-2">
+                      <p className="line-clamp-1 text-sm font-semibold text-white">{part.name}</p>
+                      <p className="line-clamp-1 text-xs text-steel-300">{part.partNumber}</p>
+                      <p className="line-clamp-1 text-xs text-steel-300">{crewSummary(part)}</p>
                       <p className="text-xs text-steel-200">Qty {part.quantityComplete}/{part.quantityRequired}</p>
                     </div>
                   </button>
@@ -730,11 +979,82 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               {!myParts.length ? <p className="text-sm text-steel-300">No parts assigned yet.</p> : null}
             </section>
           </div>
-        ) : view === "STAGE" ? (
+        ) : view === "OVERVIEW" ? (
           <div className="h-full overflow-y-auto p-4">
+            <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+              <section className="rounded-[3px] border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
+                <h2 className="text-3xl font-semibold text-steel-100">Season Progress</h2>
+                <p className="mt-2 text-sm text-steel-300">
+                  {sorted.filter((part) => stageForItem(part) === "COMPLETED").length} of {sorted.length} parts completed
+                </p>
+                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#1c2635]">
+                  <div
+                    className="h-full bg-[#1a9fff]"
+                    style={{
+                      width: `${sorted.length ? Math.round((sorted.filter((part) => stageForItem(part) === "COMPLETED").length / sorted.length) * 100) : 0}%`
+                    }}
+                  />
+                </div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {(["UNASSIGNED", "ASSIGNED", "MACHINED", "COMPLETED"] as WorkflowStage[]).map((stage) => (
+                    <button
+                      key={stage}
+                      type="button"
+                      onClick={() => {
+                        setActiveStage(stage);
+                        setView("STAGE");
+                      }}
+                      className="rounded-[3px] border border-[#31465f] bg-[#202a38] px-3 py-2 text-left hover:bg-[#263344]"
+                    >
+                      <p className="text-xs uppercase tracking-wide text-[#9fb0c2]">{stageLabel(stage)}</p>
+                      <p className="text-xl font-semibold text-[#d6e4f2]">{byStage[stage].length}</p>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4">
+                  <h3 className="text-xl font-semibold text-steel-100">Progress By Subsystem</h3>
+                  <div className="mt-2 space-y-2">
+                    {subsystemCounts.map(([key]) => {
+                      const items = sorted.filter((part) => subsystemFromPartNumber(part.partNumber) === key);
+                      const done = items.filter((part) => stageForItem(part) === "COMPLETED").length;
+                      const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+                      return (
+                        <div key={key} className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2">
+                          <div className="flex items-center justify-between text-sm text-[#d6e4f2]">
+                            <span>{subsystemLabel(key)}</span>
+                            <span>{done}/{items.length}</span>
+                          </div>
+                          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#101721]">
+                            <div className="h-full bg-[#1a9fff]" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+              <section className="rounded-[3px] border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
+                <h3 className="text-2xl font-semibold text-steel-100">Leaderboard</h3>
+                <p className="text-sm text-steel-300">Top contributors this season.</p>
+                <div className="mt-3 space-y-2">
+                  {communityLeaderboard.map((person, index) => (
+                    <div key={person.name} className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2">
+                      <p className="text-sm text-[#d6e4f2]">{index + 1}. {person.name}</p>
+                      <p className="text-xs text-[#9fb0c2]">
+                        Completed: {person.completed} | Assigned: {person.total}
+                      </p>
+                    </div>
+                  ))}
+                  {!communityLeaderboard.length ? <p className="text-sm text-steel-300">No contributor stats yet.</p> : null}
+                </div>
+              </section>
+            </div>
+          </div>
+        ) : view === "STAGE" ? (
+          <div className="h-full overflow-y-auto p-4 pb-6">
             <h2 className="mb-3 text-3xl font-semibold text-steel-100">{stageLabel(activeStage).toUpperCase()}</h2>
             <div
-              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
+              className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6"
               onDragOver={(event) => {
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "move";
@@ -742,7 +1062,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               onDrop={(event) => {
                 const partId = event.dataTransfer.getData("text/plain");
                 if (!partId) return;
-                moveMutation.mutate({ partId, toStatus: canonicalStatusForStage(activeStage) });
+                requestStageMove(partId, canonicalStatusForStage(activeStage));
               }}
             >
               {stageItems.map((part) => (
@@ -760,17 +1080,19 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   }}
                   className={`relative overflow-hidden border text-left ${priorityClass(part.priority)}`}
                 >
-                  <div className="aspect-[3/4] bg-steel-800">
-                    {part.photos[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
+                  {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
+                    <div className="h-28 bg-steel-800">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
-                    ) : null}
-                  </div>
-                  <div className="relative min-h-[102px] space-y-1 bg-[linear-gradient(180deg,rgba(0,0,0,0.15),rgba(0,0,0,0.55))] p-3">
-                    <p className="line-clamp-1 text-base font-semibold text-white">{part.name}</p>
+                    </div>
+                  ) : (
+                    <div className="h-14 bg-steel-800/70" />
+                  )}
+                  <div className="relative min-h-[88px] space-y-0.5 bg-[linear-gradient(180deg,rgba(0,0,0,0.15),rgba(0,0,0,0.55))] p-2.5">
+                    <p className="line-clamp-1 text-sm font-semibold text-white">{part.name}</p>
                     <p className="line-clamp-1 text-xs text-steel-300">{part.partNumber}</p>
-                    <p className="line-clamp-1 text-xs text-steel-300">{assigneeSummary(part)}</p>
-                    <p className="text-xs text-steel-300">Stage: {stageLabel(statusToStage(part.status))}</p>
+                    <p className="line-clamp-1 text-xs text-steel-300">{crewSummary(part)}</p>
+                    <p className="text-xs text-steel-300">Stage: {stageLabel(stageForItem(part))}</p>
                     <span className="absolute right-3 top-3 rounded-full border border-white/25 bg-black/50 px-2 py-0.5 text-xs text-white">
                       {part.quantityComplete}/{part.quantityRequired}
                     </span>
@@ -784,7 +1106,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
           <div ref={detailScrollRef} className="relative h-full overflow-y-auto bg-[#242830]">
             {showCompactDetailHeader ? (
               <div className="sticky top-0 z-30 border-y border-[#31465f] bg-[linear-gradient(90deg,rgba(27,40,56,0.94),rgba(38,49,64,0.94),rgba(27,40,56,0.94))] px-5 py-2 backdrop-blur-sm">
-              <div className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] items-center gap-3 overflow-hidden">
+              <div className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] items-center gap-3 overflow-hidden max-lg:grid-cols-1">
                 <div className="relative inline-flex h-11 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-[#1a9fff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
                   <span className="pointer-events-none absolute left-3 text-lg font-semibold tracking-wide">
                     {stageLabel(statusToStage(selectedPart.status))}
@@ -792,10 +1114,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <select
                     value={statusToStage(selectedPart.status)}
                     onChange={(event) =>
-                      moveMutation.mutate({
-                        partId: selectedPart.id,
-                        toStatus: canonicalStatusForStage(event.target.value as WorkflowStage)
-                      })
+                      requestStageMove(
+                        selectedPart.id,
+                        canonicalStatusForStage(event.target.value as WorkflowStage)
+                      )
                     }
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
                   >
@@ -809,9 +1131,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                 </div>
                 <div className="flex min-w-0 items-center gap-2 text-[#c7d5e0]">
                   <div className="h-7 w-7 overflow-hidden rounded-[2px] bg-[#2a475e]">
-                    {selectedPart.photos[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/uploads/${selectedPart.photos[0].storageKey}`} alt={selectedPart.name} className="h-full w-full object-cover" />
+                    {photoForPart(selectedPart) ? (
+                      isVideoStorageKey(photoForPart(selectedPart)) ? (
+                        <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-[#9fb0c2]">V</div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={`/uploads/${photoForPart(selectedPart)}`} alt={selectedPart.name} className="h-full w-full object-cover" />
+                      )
                     ) : null}
                   </div>
                   <div className="min-w-0">
@@ -819,44 +1145,44 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <p className="truncate text-xs text-[#9fb0c2]">{selectedPart.partNumber}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setDetailPanel("settings")}
-                    className={`inline-flex h-9 w-[124px] items-center justify-center gap-2 rounded-[4px] border px-2 ${
-                      detailPanel === "settings"
-                        ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#c7e7ff]"
-                        : "border-[#435266] bg-[#3a4659] text-[#c7d5e0] hover:bg-[#4a5970]"
-                    }`}
-                  >
-                    <Settings className="h-5 w-5" />
-                    <span className="text-xs font-semibold">Settings</span>
-                  </button>
-                  <button
-                    onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-[4px] border border-[#435266] bg-[#3a4659] text-[#c7d5e0] hover:bg-[#4a5970]"
-                  >
-                    <ArrowUp className="h-5 w-5" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => detailScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+                  className="inline-flex h-9 min-w-[144px] items-center justify-center rounded-[4px] border border-[#435266] bg-[#3a4659] px-3 text-xs font-semibold text-[#c7d5e0] hover:bg-[#4a5970]"
+                >
+                  Scroll To Top
+                </button>
               </div>
               </div>
             ) : null}
 
             <div className="relative h-[360px] overflow-hidden border-b border-[#31465f]">
-              {selectedPart.photos[0] ? (
+              {photoForPart(selectedPart) ? (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/uploads/${selectedPart.photos[0].storageKey}`}
-                    alt={selectedPart.name}
-                    className="absolute inset-0 h-full w-full scale-105 object-cover blur-2xl opacity-35"
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/uploads/${selectedPart.photos[0].storageKey}`}
-                    alt={selectedPart.name}
-                    className="absolute inset-0 h-full w-full object-cover opacity-95"
-                  />
+                  {isVideoStorageKey(photoForPart(selectedPart)) ? (
+                    <video
+                      src={`/uploads/${photoForPart(selectedPart)}`}
+                      className="absolute inset-0 h-full w-full object-cover opacity-85"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                    />
+                  ) : (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/uploads/${photoForPart(selectedPart)}`}
+                        alt={selectedPart.name}
+                        className="absolute inset-0 h-full w-full scale-105 object-cover blur-2xl opacity-35"
+                      />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/uploads/${photoForPart(selectedPart)}`}
+                        alt={selectedPart.name}
+                        className="absolute inset-0 h-full w-full object-cover opacity-95"
+                      />
+                    </>
+                  )}
                 </>
               ) : (
                 <div className="h-full w-full bg-[#1f2630]" />
@@ -868,7 +1194,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </div>
             </div>
 
-            <div className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] border-b border-[#31465f] bg-[linear-gradient(90deg,rgba(24,34,48,0.96),rgba(43,54,71,0.92),rgba(24,34,48,0.96))] backdrop-blur-sm">
+            <div
+              ref={installBarRef}
+              className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] border-b border-[#31465f] bg-[linear-gradient(90deg,rgba(24,34,48,0.96),rgba(43,54,71,0.92),rgba(24,34,48,0.96))] backdrop-blur-sm max-lg:grid-cols-1"
+            >
               <div className="m-3">
                 <div className="relative inline-flex h-12 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-[#1a9fff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
                   <span className="pointer-events-none absolute left-3 text-xl font-semibold tracking-wide">
@@ -877,10 +1206,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <select
                     value={statusToStage(selectedPart.status)}
                     onChange={(event) =>
-                      moveMutation.mutate({
-                        partId: selectedPart.id,
-                        toStatus: canonicalStatusForStage(event.target.value as WorkflowStage)
-                      })
+                      requestStageMove(
+                        selectedPart.id,
+                        canonicalStatusForStage(event.target.value as WorkflowStage)
+                      )
                     }
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
                   >
@@ -895,12 +1224,12 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </div>
               <div className="grid grid-cols-2 gap-2 px-2 py-2 text-center lg:grid-cols-4">
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Primary Assignee</p>
+                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Machinist</p>
                   <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedPrimaryOwnerName}</p>
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Assignees</p>
-                  <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedCollaboratorLabel}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Finisher</p>
+                  <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedFinisherName}</p>
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
                   <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Copies</p>
@@ -913,7 +1242,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </div>
               <div className="mr-4 flex items-center gap-2">
                 <button
-                  onClick={() => setDetailPanel("settings")}
+                  onClick={() => setDetailPanel((prev) => (prev === "settings" ? "main" : "settings"))}
                   className={`inline-flex h-9 w-[124px] items-center justify-center gap-2 rounded-[4px] border px-2 ${
                     detailPanel === "settings"
                       ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#c7e7ff]"
@@ -928,52 +1257,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
 
             {detailPanel === "main" ? (
               <div className="space-y-5 bg-[radial-gradient(circle_at_20%_20%,rgba(97,132,170,0.15),transparent_50%)] p-4">
-                <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
-                  <div className="space-y-4">
-                    <div className="border-t border-[#31465f] pt-4">
-                      <p className="text-lg text-[#99a9ba]">Status</p>
-                      <div className="mt-3 border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
-                        <p className="text-xl text-[#e5eef7]">Current: {stageLabel(statusToStage(selectedPart.status))}</p>
-                        <p className="text-base text-[#9fb0c2]">{selectedPart.partNumber}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {STAGE_ORDER.map((stage) => (
-                            <button
-                              key={stage}
-                              type="button"
-                              onClick={() =>
-                                moveMutation.mutate({
-                                  partId: selectedPart.id,
-                                  toStatus: canonicalStatusForStage(stage)
-                                })
-                              }
-                              className={`border px-2 py-1 text-sm ${
-                                stage === statusToStage(selectedPart.status)
-                                  ? "border-[#1a9fff] bg-[#1a9fff]/20 text-[#7cc5ff]"
-                                  : "border-[#31465f] bg-[#1d2633] text-[#9aa8b8] hover:bg-[#243244]"
-                              }`}
-                            >
-                              {stageLabel(stage)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                      <h4 className="text-2xl font-semibold text-[#d6e4f2]">Assignees</h4>
-                      <p className="mt-3 text-lg text-[#9fb0c2]">
-                        {selectedPart.owners.length} assignees assigned
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {selectedPart.owners.slice(0, 6).map((owner) => (
-                          <span key={owner.userId} className="border border-[#31465f] bg-[#2d3a4d] px-2 py-1 text-sm text-[#d6e4f2]">
-                            {owner.user.displayName}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                <div className="grid gap-5 xl:grid-cols-[320px]">
+                  <div className="space-y-4 xl:justify-self-end">
                     <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
                       <h4 className="text-2xl font-semibold text-[#d6e4f2]">Quantity Tracking</h4>
                       <p className="mt-2 text-lg text-[#9fb0c2]">
@@ -1018,47 +1303,88 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         </button>
                       </div>
                     </div>
-                    <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                      <h4 className="text-2xl font-semibold text-[#d6e4f2]">Progress</h4>
-                      <p className="mt-2 text-lg text-[#9fb0c2]">
-                        {selectedPart.quantityRequired
-                          ? Math.round((selectedPart.quantityComplete / selectedPart.quantityRequired) * 100)
-                          : 0}
-                        % complete
-                      </p>
-                    </div>
                   </div>
                 </div>
 
                 <div className="border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
-                  <h3 className="text-2xl font-semibold text-[#d6e4f2]">Discussion</h3>
+                  <h3 className="text-2xl font-semibold text-[#d6e4f2]">Photos</h3>
+                  <p className="mt-1 text-sm text-[#9fb0c2]">Upload images or videos. Set thumbnail in Settings.</p>
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      uploadPhotoMutation.mutate(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => uploadInputRef.current?.click()}
+                    disabled={uploadPhotoMutation.isPending}
+                    className="mt-3 rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-3 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {uploadPhotoMutation.isPending ? "Uploading..." : "Upload Photo/Video"}
+                  </button>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                    {detailPhotos.map((photo) => (
+                      <div key={photo.id} className="rounded-[3px] border border-[#31465f] bg-[#1d2633] p-1">
+                        {isVideoPhoto(photo) ? (
+                          <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
+                            <video
+                              src={`/uploads/${photo.storageKey}`}
+                              className="h-24 w-full rounded-[2px] object-cover"
+                              muted
+                            />
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/uploads/${photo.storageKey}`}
+                              alt="Part media"
+                              className="h-24 w-full rounded-[2px] object-cover"
+                            />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {!detailPhotos.length ? <p className="mt-2 text-xs text-[#9fb0c2]">No media uploaded yet.</p> : null}
+                </div>
+
+                <div className="border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
+                  <h3 className="text-2xl font-semibold text-[#d6e4f2]">Notes</h3>
                   <div className="mt-3 max-h-56 space-y-2 overflow-y-auto rounded-[3px] border border-[#31465f] bg-[#1a2230] p-3">
-                    {discussionMessages.length ? (
-                      discussionMessages.map((message) => (
-                        <div key={message.id} className="rounded-[3px] border border-[#2e3f55] bg-[#223044] px-3 py-2">
-                          <p className="text-xs text-[#9fb0c2]">
-                            {message.author} - {new Date(message.createdAt).toLocaleString()}
+                    {noteMessages.length ? (
+                      noteMessages.map((message) => (
+                        <div key={message.id} className="rounded-[3px] border border-[#374b64] bg-[#202c3c] px-3 py-2">
+                          <p className="text-xs uppercase tracking-wide text-[#8ea6bc]">
+                            {new Date(message.createdAt).toLocaleString()}
                           </p>
                           <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#d6e4f2]">{message.text}</p>
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-[#9fb0c2]">No messages yet. Start the discussion below.</p>
+                      <p className="text-sm text-[#9fb0c2]">No notes yet.</p>
                     )}
                   </div>
                   <div className="mt-3 flex gap-2">
                     <textarea
-                      value={discussionInput}
-                      onChange={(event) => setDiscussionInput(event.target.value)}
-                      placeholder="Type a message for assignees..."
+                      value={noteInput}
+                      onChange={(event) => setNoteInput(event.target.value)}
+                      placeholder="Add a note..."
                       className="min-h-[72px] flex-1 resize-y rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2 text-sm text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                     />
                     <button
                       type="button"
-                      onClick={postDiscussionMessage}
+                      onClick={postNoteMessage}
                       className="h-fit rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-3 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25"
                     >
-                      Send
+                      Add Note
                     </button>
                   </div>
                 </div>
@@ -1084,7 +1410,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       onChange={(event) => setEditName(event.target.value)}
                       className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                     />
-                    <label className="mt-3 block text-xs text-[#9aa8b8]">Part ID</label>
+                    <label className="mt-3 block text-xs text-[#9aa8b8]">Part Number</label>
                     <input
                       value={editPartNumber}
                       onChange={(event) => setEditPartNumber(event.target.value)}
@@ -1104,9 +1430,9 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     </select>
                   </div>
                   <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Assignees</p>
-                    <p className="mt-2 text-lg text-[#d6e4f2]">Primary assignee: {selectedPrimaryOwnerName}</p>
-                    <p className="text-base text-[#9fb0c2]">Additional assignees: {selectedCollaboratorLabel}</p>
+                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Roles</p>
+                    <p className="mt-2 text-lg text-[#d6e4f2]">Machinist: {selectedPrimaryOwnerName}</p>
+                    <p className="text-base text-[#9fb0c2]">Finisher(s): {selectedCollaboratorLabel}</p>
                   </div>
                   <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
                     <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Quantity</p>
@@ -1125,18 +1451,66 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       inputMode="numeric"
                     />
                   </div>
-                  <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Actions</p>
-                    <button
-                      type="button"
-                      onClick={() => settingsMutation.mutate()}
-                      disabled={settingsMutation.isPending}
-                      className="mt-2 inline-flex rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-3 py-1 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {settingsMutation.isPending ? "Saving..." : "Save Settings"}
-                    </button>
-                    <p className="mt-2 text-xs text-[#9fb0c2]">Edits save directly without leaving this view.</p>
+                  <div className="xl:col-span-2 border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
+                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Photos</p>
+                    <p className="mt-1 text-xs text-[#9fb0c2]">Pick which image is used as the part thumbnail.</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                      {detailPhotos.map((photo) => {
+                        const active = photoForPart(selectedPart) === photo.storageKey;
+                        return (
+                          <div
+                            key={photo.id}
+                            className={`rounded-[3px] border p-1 ${
+                              active ? "border-[#1a9fff] bg-[#1a9fff]/15" : "border-[#31465f] bg-[#1d2633]"
+                            }`}
+                          >
+                            {isVideoPhoto(photo) ? (
+                              <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
+                                <video
+                                  src={`/uploads/${photo.storageKey}`}
+                                  className="h-20 w-full rounded-[2px] object-cover"
+                                  muted
+                                />
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={`/uploads/${photo.storageKey}`}
+                                  alt="Part photo"
+                                  className="h-20 w-full rounded-[2px] object-cover"
+                                />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setThumbnail(selectedPart.id, photo.storageKey)}
+                              className={`mt-1 w-full rounded-[2px] border px-2 py-1 text-xs ${
+                                active
+                                  ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#d7efff]"
+                                  : "border-[#435266] bg-[#3a4659] text-[#c7d5e0] hover:bg-[#4a5970]"
+                              }`}
+                            >
+                              {active ? "Thumbnail" : "Set Thumbnail"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {!detailPhotos.length ? (
+                      <p className="mt-2 text-xs text-[#9fb0c2]">No photos uploaded yet.</p>
+                    ) : null}
                   </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => settingsMutation.mutate()}
+                    disabled={settingsMutation.isPending}
+                    className="inline-flex rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-4 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {settingsMutation.isPending ? "Saving..." : "Save Settings"}
+                  </button>
                 </div>
               </div>
             )}
@@ -1144,6 +1518,40 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         ) : (
           <div className="p-6 text-2xl text-steel-300">No part selected.</div>
         )}
+        {previewMedia ? (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4"
+            onClick={() => setPreviewMedia(null)}
+          >
+            <div
+              className="relative max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-[4px] border border-[#3b4c63] bg-[#121923]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewMedia(null)}
+                className="absolute right-2 top-2 z-10 rounded-[3px] border border-[#435266] bg-[#2a3748] p-1 text-[#c7d5e0] hover:bg-[#3a495e]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              {isVideoPreview(previewMedia) ? (
+                <video
+                  src={`/uploads/${previewMedia.storageKey}`}
+                  controls
+                  autoPlay
+                  className="max-h-[92vh] w-full bg-black object-contain"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/uploads/${previewMedia.storageKey}`}
+                  alt="Part media preview"
+                  className="max-h-[92vh] w-full bg-black object-contain"
+                />
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

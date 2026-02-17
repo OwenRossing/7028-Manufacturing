@@ -1,15 +1,6 @@
 import { PartOwnerRole } from "@prisma/client";
 import { prisma } from "@/lib/db";
-
-function adminEmails(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS ?? "";
-  return new Set(
-    raw
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
+import { isEmailAdmin } from "@/lib/admin-accounts";
 
 export async function isAdminUser(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
@@ -17,7 +8,7 @@ export async function isAdminUser(userId: string): Promise<boolean> {
     select: { email: true }
   });
   if (!user?.email) return false;
-  return adminEmails().has(user.email.toLowerCase());
+  return isEmailAdmin(user.email);
 }
 
 export async function canManagePart(userId: string, partId: string): Promise<boolean> {

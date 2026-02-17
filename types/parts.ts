@@ -5,6 +5,7 @@ export type PartListItem = {
   partNumber: string;
   name: string;
   description: string | null;
+  thumbnailStorageKey: string | null;
   status: PartStatus;
   quantityRequired: number;
   quantityComplete: number;

@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DEMO_COOKIE_NAME } from "@/lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/demo-login", "/_next", "/favicon.ico", "/uploads"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/google",
+  "/api/auth/demo-login",
+  "/api/auth/logout",
+  "/_next",
+  "/favicon.ico",
+  "/uploads"
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

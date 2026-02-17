@@ -9,34 +9,38 @@ export const ORDER: PartStatus[] = [
   "DONE"
 ];
 
-export type WorkflowStage = "NOT_STARTED" | "MACHINED" | "COMPLETED";
+export type WorkflowStage = "UNASSIGNED" | "ASSIGNED" | "MACHINED" | "COMPLETED";
 
 export const STAGE_ORDER: WorkflowStage[] = [
-  "NOT_STARTED",
+  "UNASSIGNED",
+  "ASSIGNED",
   "MACHINED",
   "COMPLETED"
 ];
 
 const STAGE_TO_STATUSES: Record<WorkflowStage, PartStatus[]> = {
-  NOT_STARTED: ["DESIGNED"],
+  UNASSIGNED: ["DESIGNED"],
+  ASSIGNED: ["DESIGNED"],
   MACHINED: ["CUT", "MACHINED", "ASSEMBLED", "VERIFIED"],
   COMPLETED: ["DONE"]
 };
 
 const STAGE_TO_CANONICAL_STATUS: Record<WorkflowStage, PartStatus> = {
-  NOT_STARTED: "DESIGNED",
+  UNASSIGNED: "DESIGNED",
+  ASSIGNED: "DESIGNED",
   MACHINED: "MACHINED",
   COMPLETED: "DONE"
 };
 
-export function statusToStage(status: PartStatus): WorkflowStage {
-  if (status === "DESIGNED") return "NOT_STARTED";
+export function statusToStage(status: PartStatus, hasOwners = true): WorkflowStage {
+  if (status === "DESIGNED") return hasOwners ? "ASSIGNED" : "UNASSIGNED";
   if (status === "CUT" || status === "MACHINED" || status === "ASSEMBLED" || status === "VERIFIED") return "MACHINED";
   return "COMPLETED";
 }
 
 export function stageLabel(stage: WorkflowStage): string {
-  if (stage === "NOT_STARTED") return "Not Started";
+  if (stage === "UNASSIGNED") return "Unassigned";
+  if (stage === "ASSIGNED") return "Assigned";
   if (stage === "MACHINED") return "Machined";
   return "Completed";
 }
@@ -50,7 +54,7 @@ export function canonicalStatusForStage(stage: WorkflowStage): PartStatus {
 }
 
 export function nextStatus(current: PartStatus): PartStatus | null {
-  const currentStage = statusToStage(current);
+  const currentStage = statusToStage(current, true);
   const stageIndex = STAGE_ORDER.indexOf(currentStage);
   if (stageIndex < 0 || stageIndex === STAGE_ORDER.length - 1) {
     return null;

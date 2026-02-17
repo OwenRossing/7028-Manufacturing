@@ -1,4 +1,9 @@
 import { PrismaClient } from "@prisma/client";
+import { isProductionMode } from "@/lib/app-mode";
+
+if (isProductionMode() && process.env.DATABASE_URL_PRODUCTION) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_PRODUCTION;
+}
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 

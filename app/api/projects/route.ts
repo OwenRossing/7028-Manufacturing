@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { parseJson, requireUser } from "@/lib/api";
+import { jsonError, parseJson, requireUser } from "@/lib/api";
+import { isAdminUser } from "@/lib/permissions";
 
 const createSchema = z.object({
   name: z.string().min(2),
@@ -25,6 +26,10 @@ export async function POST(request: NextRequest) {
   const userResult = requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
+  }
+  const isAdmin = await isAdminUser(userResult);
+  if (!isAdmin) {
+    return jsonError("Admin access required.", 403);
   }
 
   const parsed = await parseJson(request, createSchema);

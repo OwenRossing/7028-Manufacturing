@@ -1,34 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
-import { DEMO_COOKIE_NAME } from "@/lib/auth";
 import { jsonError, parseJson } from "@/lib/api";
+import { setAuthCookie } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { isDemoMode } from "@/lib/app-mode";
 
 const schema = z.object({
-  email: z.string().email()
+  userId: z.string().min(1)
 });
 
-export async function POST(request: NextRequest) {
-  const parsed = await parseJson(request, schema);
-  if (!parsed.ok) {
-    return parsed.response;
+export async function GET() {
+  if (!isDemoMode()) {
+    return jsonError("Demo login is disabled in production mode.", 410);
   }
+
+  const users = await prisma.user.findMany({
+    orderBy: { displayName: "asc" },
+    take: 20,
+    select: { id: true, displayName: true, email: true }
+  });
+  return NextResponse.json({ items: users });
+}
+
+export async function POST(request: NextRequest) {
+  if (!isDemoMode()) {
+    return jsonError("Demo login is disabled in production mode.", 410);
+  }
+
+  const parsed = await parseJson(request, schema);
+  if (!parsed.ok) return parsed.response;
 
   const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email }
+    where: { id: parsed.data.userId },
+    select: { id: true }
   });
-  if (!user) {
-    return jsonError("No demo user found for that email.", 404);
-  }
+  if (!user) return jsonError("Demo user not found.", 404);
 
   const response = NextResponse.json({ ok: true, userId: user.id });
-  response.cookies.set({
-    name: DEMO_COOKIE_NAME,
-    value: user.id,
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 14
-  });
+  setAuthCookie(response, user.id);
   return response;
 }
