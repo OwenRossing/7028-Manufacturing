@@ -6,8 +6,8 @@ export function jsonError(message: string, status = 400): NextResponse {
   return NextResponse.json({ error: message }, { status });
 }
 
-export function requireUser(request: NextRequest): string | NextResponse {
-  const userId = getUserIdFromRequest(request);
+export async function requireUser(request: NextRequest): Promise<string | NextResponse> {
+  const userId = await getUserIdFromRequest(request);
   if (!userId) {
     return jsonError("Unauthorized", 401);
   }

@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/api";
 import { listWorkspaceOptions } from "@/lib/workspace-config";
 
 export async function GET(request: NextRequest) {
-  const userResult = requireUser(request);
+  const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
   }

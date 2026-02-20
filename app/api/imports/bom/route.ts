@@ -37,7 +37,7 @@ function matchesPartPrefix(
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const userResult = requireUser(request);
+  const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
   }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, parseJson } from "@/lib/api";
-import { setAuthCookie } from "@/lib/auth";
+import { createAuthSession } from "@/lib/auth";
 
 const schema = z.object({
   credential: z.string().min(1)
@@ -61,6 +61,6 @@ export async function POST(request: NextRequest) {
   });
 
   const response = NextResponse.json({ ok: true, userId: user.id });
-  setAuthCookie(response, user.id);
+  await createAuthSession(response, user.id, request.headers.get("user-agent"));
   return response;
 }

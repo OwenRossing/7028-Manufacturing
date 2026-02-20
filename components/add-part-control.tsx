@@ -42,7 +42,7 @@ type WorkspaceOptions = {
   }>;
 };
 
-type UserOption = { id: string; displayName: string; email: string };
+type UserOption = { id: string; displayName: string; email?: string };
 
 function normalizeYear(value: string): string {
   return value.replace(/\D/g, "").slice(0, 4);

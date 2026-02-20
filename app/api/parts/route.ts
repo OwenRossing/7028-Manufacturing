@@ -27,7 +27,7 @@ function statusValues(searchParams: URLSearchParams): PartStatus[] {
 }
 
 export async function GET(request: NextRequest) {
-  const userResult = requireUser(request);
+  const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
   }
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userResult = requireUser(request);
+  const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
   }

@@ -11,7 +11,7 @@ const patchSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const userResult = requireUser(request);
+  const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) return userResult;
   if (!(await isAdminUser(userResult))) return jsonError("Admin access required.", 403);
 
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const userResult = requireUser(request);
+  const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) return userResult;
   if (!(await isAdminUser(userResult))) return jsonError("Admin access required.", 403);
 

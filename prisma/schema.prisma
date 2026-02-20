@@ -54,6 +54,7 @@ model User {
   events      PartEvent[]
   photos      PartPhoto[] @relation("UploadedBy")
   batches     ImportBatch[]
+  sessions    Session[]
 }
 
 model Project {
@@ -178,4 +179,17 @@ model MutationToken {
 
   @@unique([token, scope])
   @@index([scope, createdAt])
+}
+
+model Session {
+  id         String   @id
+  userId     String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
 }

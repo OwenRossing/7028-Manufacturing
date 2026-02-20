@@ -1,8 +1,16 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { ProjectAdminPanel } from "@/components/project-admin-panel";
 import { listWorkspaceOptions } from "@/lib/workspace-config";
+import { getUserIdFromCookieStore } from "@/lib/auth";
+import { isAdminUser } from "@/lib/permissions";
 
 export default async function ProjectsPage() {
+  const userId = await getUserIdFromCookieStore();
+  if (!userId || !(await isAdminUser(userId))) {
+    redirect("/");
+  }
+
   const [projects, config] = await Promise.all([
     prisma.project.findMany({
       orderBy: { createdAt: "desc" },

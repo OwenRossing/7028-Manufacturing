@@ -1,8 +1,8 @@
 export type AppMode = "demo" | "production";
 
 function normalizeMode(value: string | undefined): AppMode {
-  if (value?.toLowerCase() === "production") return "production";
-  return "demo";
+  if (value?.toLowerCase() === "demo") return "demo";
+  return "production";
 }
 
 export function appMode(): AppMode {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEMO_COOKIE_NAME } from "@/lib/auth";
+
+const AUTH_COOKIE_NAME = process.env.DEMO_SESSION_COOKIE ?? "demo_session_id";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -17,7 +18,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSession = Boolean(request.cookies.get(DEMO_COOKIE_NAME)?.value);
+  const hasSession = Boolean(request.cookies.get(AUTH_COOKIE_NAME)?.value);
   if (!hasSession) {
     const redirectUrl = new URL("/login", request.url);
     return NextResponse.redirect(redirectUrl);

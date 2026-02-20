@@ -10,21 +10,27 @@ export const metadata: Metadata = {
   description: "Manufactured parts tracker for FRC robotics teams."
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const [projects, partCounts] = await Promise.all([
-    prisma.project.findMany({
-      select: { id: true, name: true },
-      orderBy: { createdAt: "desc" },
-      take: 20
-    }),
-    prisma.part.groupBy({
-      by: ["projectId", "status"],
-      _count: { _all: true }
-    })
+    prisma.project
+      .findMany({
+        select: { id: true, name: true },
+        orderBy: { createdAt: "desc" },
+        take: 20
+      })
+      .catch(() => []),
+    prisma.part
+      .groupBy({
+        by: ["projectId", "status"],
+        _count: { _all: true }
+      })
+      .catch(() => [])
   ]);
 
   const projectMetrics = new Map<string, { total: number; done: number }>();

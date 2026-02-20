@@ -16,7 +16,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userResult = requireUser(request);
+  const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) {
     return userResult;
   }

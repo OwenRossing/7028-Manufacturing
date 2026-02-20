@@ -803,7 +803,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
           </div>
           {onlyMine && !currentUserId ? (
             <p className="mx-1 rounded-[3px] border border-yellow-500/40 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-200">
-              Sign in to use "Show only my parts."
+              Sign in to use &quot;Show only my parts.&quot;
             </p>
           ) : null}
         </div>

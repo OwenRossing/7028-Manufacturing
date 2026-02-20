@@ -98,6 +98,8 @@ The container startup command automatically runs:
 Set these in your deployment environment:
 
 - `DATABASE_URL`
+- `APP_MODE=production`
+- `NEXT_PUBLIC_APP_MODE=production`
 - `GOOGLE_CLIENT_ID`
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
 - `DEMO_SESSION_COOKIE` (optional custom cookie name)

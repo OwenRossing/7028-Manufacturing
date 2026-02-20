@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, parseJson } from "@/lib/api";
-import { setAuthCookie } from "@/lib/auth";
+import { createAuthSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isDemoMode } from "@/lib/app-mode";
 
@@ -37,6 +37,6 @@ export async function POST(request: NextRequest) {
   if (!user) return jsonError("Demo user not found.", 404);
 
   const response = NextResponse.json({ ok: true, userId: user.id });
-  setAuthCookie(response, user.id);
+  await createAuthSession(response, user.id, request.headers.get("user-agent"));
   return response;
 }
