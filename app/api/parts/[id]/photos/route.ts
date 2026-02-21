@@ -3,14 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { env } from "@/lib/env";
 import { NoopImageProcessingProvider } from "@/lib/image/provider";
-import { deleteUpload, saveUpload } from "@/lib/storage";
+import { storageProvider } from "@/lib/storage";
 import { canManagePart } from "@/lib/permissions";
 import { getPartThumbnail, setPartThumbnail } from "@/lib/part-thumbnails";
 
 export const runtime = "nodejs";
 
-const MAX_UPLOAD_BYTES = Number.parseInt(process.env.MAX_UPLOAD_MB ?? "10", 10) * 1024 * 1024;
+const MAX_UPLOAD_BYTES = env.MAX_UPLOAD_MB * 1024 * 1024;
 const imageProcessor = new NoopImageProcessingProvider();
 
 export async function POST(
@@ -40,7 +41,7 @@ export async function POST(
     return jsonError("Unsupported file type. Use any image or video format.", 400);
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return jsonError(`File too large. Max ${process.env.MAX_UPLOAD_MB ?? "10"} MB.`, 400);
+    return jsonError(`File too large. Max ${env.MAX_UPLOAD_MB} MB.`, 400);
   }
 
   const originalBytes = new Uint8Array(await file.arrayBuffer());
@@ -48,7 +49,7 @@ export async function POST(
     bytes: originalBytes,
     mimeType: file.type
   });
-  const saved = await saveUpload({
+  const saved = await storageProvider.save({
     bytes: processed.bytes,
     originalName: file.name
   });
@@ -89,7 +90,7 @@ export async function POST(
       id: photo.id,
       storageKey: photo.storageKey,
       mimeType: photo.mimeType,
-      publicPath: saved.publicPath
+      publicPath: saved.publicUrl
     },
     part: updatedPart
   });
@@ -136,6 +137,6 @@ export async function DELETE(
     });
     await setPartThumbnail(id, fallback?.storageKey ?? null);
   }
-  await deleteUpload(photo.storageKey);
+  await storageProvider.delete(photo.storageKey);
   return NextResponse.json({ success: true });
 }

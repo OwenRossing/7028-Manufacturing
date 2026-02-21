@@ -78,11 +78,16 @@ model Part {
   quantityRequired Int         @default(1)
   quantityComplete Int         @default(0)
   priority         Int         @default(2)
+  onshapeDocumentId String?
+  onshapeWorkspaceId String?
+  onshapeElementId String?
+  onshapePartId String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   project          Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owners           PartOwner[]
   photos           PartPhoto[]
+  thumbnail        PartThumbnail?
   events           PartEvent[]
 
   @@unique([projectId, partNumber])
@@ -90,6 +95,18 @@ model Part {
   @@index([name])
   @@index([status])
   @@index([projectId, status])
+  @@index([onshapeDocumentId, onshapeWorkspaceId, onshapeElementId, onshapePartId])
+  @@index([projectId, onshapePartId])
+}
+
+model PartThumbnail {
+  partId      String   @id
+  storageKey  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  part        Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+
+  @@index([storageKey])
 }
 
 model PartOwner {

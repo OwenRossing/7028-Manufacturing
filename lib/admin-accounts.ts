@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
+import { env } from "@/lib/env";
 
 let ensurePromise: Promise<void> | null = null;
 
 function envAdminEmails(): Set<string> {
-  const raw = process.env.ADMIN_EMAILS ?? "";
+  const raw = env.ADMIN_EMAILS;
   return new Set(
     raw
       .split(",")

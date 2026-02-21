@@ -3,9 +3,26 @@ import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { env } from "@/lib/env";
 
-export const AUTH_COOKIE_NAME = process.env.DEMO_SESSION_COOKIE ?? "demo_session_id";
-const SESSION_TTL_SECONDS = Number.parseInt(process.env.SESSION_TTL_SECONDS ?? "", 10) || 60 * 60 * 24 * 14;
+export const AUTH_COOKIE_NAME = env.DEMO_SESSION_COOKIE;
+const SESSION_TTL_SECONDS = env.SESSION_TTL_SECONDS;
+
+type SessionUserRecord = { id: string };
+type SessionRecord = {
+  id: string;
+  expiresAt: Date;
+  user: SessionUserRecord;
+};
+
+type SessionModel = {
+  findUnique(args: unknown): Promise<SessionRecord | null>;
+  delete(args: unknown): Promise<unknown>;
+  update(args: unknown): Promise<unknown>;
+  create(args: unknown): Promise<unknown>;
+};
+
+const sessionModel = (prisma as unknown as { session: SessionModel }).session;
 
 function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
@@ -46,7 +63,7 @@ async function getSessionIdFromCookieStore(): Promise<string | null> {
 
 async function validateSession(sessionId: string | null): Promise<string | null> {
   if (!sessionId) return null;
-  const session = await prisma.session.findUnique({
+  const session = await sessionModel.findUnique({
     where: { id: sessionId },
     include: { user: { select: { id: true } } }
   });
@@ -54,11 +71,11 @@ async function validateSession(sessionId: string | null): Promise<string | null>
 
   const now = new Date();
   if (session.expiresAt <= now) {
-    await prisma.session.delete({ where: { id: sessionId } }).catch(() => undefined);
+    await sessionModel.delete({ where: { id: sessionId } }).catch(() => undefined);
     return null;
   }
 
-  await prisma.session
+  await sessionModel
     .update({
       where: { id: sessionId },
       data: { lastSeenAt: now }
@@ -76,7 +93,7 @@ export async function createAuthSession(
   const sessionId = randomUUID();
   const now = Date.now();
   const expiresAt = new Date(now + SESSION_TTL_SECONDS * 1000);
-  await prisma.session.create({
+  await sessionModel.create({
     data: {
       id: sessionId,
       userId,
@@ -90,7 +107,7 @@ export async function createAuthSession(
 export async function revokeAuthSession(request: NextRequest): Promise<void> {
   const sessionId = getSessionIdFromRequest(request);
   if (!sessionId) return;
-  await prisma.session.delete({ where: { id: sessionId } }).catch(() => undefined);
+  await sessionModel.delete({ where: { id: sessionId } }).catch(() => undefined);
 }
 
 export async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {

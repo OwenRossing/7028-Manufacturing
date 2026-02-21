@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { env } from "@/lib/env";
 import { jsonError, parseJson } from "@/lib/api";
 import { createAuthSession } from "@/lib/auth";
 
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
   const parsed = await parseJson(request, schema);
   if (!parsed.ok) return parsed.response;
 
-  const expectedClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const expectedClientId = env.GOOGLE_CLIENT_ID.trim();
   if (!expectedClientId) {
     return jsonError("Google sign-in is not configured.", 503);
   }

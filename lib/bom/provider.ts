@@ -1,5 +1,5 @@
-import { NormalizedBomRow } from "@/lib/bom/types";
+import { ParseCsvBomResult } from "@/lib/bom/types";
 
 export interface BomImportProvider {
-  parse(content: string): NormalizedBomRow[];
+  parseCsvBom(content: string): ParseCsvBomResult;
 }

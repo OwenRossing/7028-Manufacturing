@@ -4,13 +4,40 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  quality:
+  quality-offline:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/frc_parts?schema=public
       APP_MODE: production
+      GOOGLE_CLIENT_ID: offline-ci-client-id
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: offline-ci-client-id
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Offline Quality Checks
+        run: npm run ci:offline
+
+  prisma-online:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/frc_parts?schema=public
+      APP_MODE: production
+      GOOGLE_CLIENT_ID: offline-ci-client-id
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: offline-ci-client-id
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,11 +54,5 @@ jobs:
       - name: Prisma Generate
         run: npm run prisma:generate
 
-      - name: Lint
-        run: npm run lint
-
       - name: Typecheck
         run: npm run typecheck
-
-      - name: Build
-        run: npm run build

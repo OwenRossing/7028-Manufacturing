@@ -8,6 +8,16 @@ Vertical-slice demo for manufactured part tracking in FRC robotics.
 - PostgreSQL + Prisma
 - Docker Compose (`web` + `db`)
 
+## Prisma Offline Workflow
+
+When Prisma engines cannot be downloaded (restricted CI/network), use the offline-safe path:
+
+- `npm run prisma:generate:if-present`
+- `npm run typecheck:offline`
+- `npm run ci:offline`
+
+See `docs/prisma-offline.md` for details and full networked validation steps.
+
 ## Features in this demo
 
 - Google sign in only (`@stmarobotics.org` accounts)
@@ -85,8 +95,10 @@ The container startup command automatically runs:
 - `POST /api/parts/:id/photos`
 - `GET /api/parts/:id/events`
 - `POST /api/imports/bom`
+- `POST /api/imports/bom/onshape`
 - `GET /api/imports/:batchId`
 - `POST /api/imports/:batchId/commit`
+- `POST /api/imports/onshape/resync`
 
 ## Future-ready seams already present
 
@@ -106,6 +118,9 @@ Set these in your deployment environment:
 - `SESSION_TTL_SECONDS` (optional, defaults to 14 days)
 - `MAX_UPLOAD_MB`
 - `ADMIN_EMAILS` (comma-separated admin account emails)
+- `ONSHAPE_BASE_URL` (optional, defaults to `https://cad.onshape.com`)
+- `ONSHAPE_ACCESS_KEY` (required for Onshape API mode)
+- `ONSHAPE_SECRET_KEY` (required for Onshape API mode)
 
 Google auth notes:
 
