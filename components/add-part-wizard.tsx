@@ -2,17 +2,21 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { queryKeys } from "@/lib/query-keys";
 import {
   buildPartNumber,
   defaultSeasonYear,
   defaultTeamNumber,
   isValidPartNumber,
-  partNumberHint
+  normalizeSeasonYear,
+  partNumberHint,
+  sanitizeTeamNumber,
+  TEAM_NUMBER_MAX_LENGTH
 } from "@/lib/part-number";
 
 type ProjectOption = {
@@ -23,6 +27,11 @@ type ProjectOption = {
 type UserOption = {
   id: string;
   displayName: string;
+};
+type WorkspaceOptions = {
+  teamNumbers: string[];
+  seasonYears: string[];
+  robotNumbers: Array<{ teamNumber: string; seasonYear: string; robotNumber: string }>;
 };
 
 type WizardState = {
@@ -52,6 +61,7 @@ export function AddPartWizard({
   const [mode, setMode] = useState<"choose" | "manual">("choose");
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [config, setConfig] = useState<WorkspaceOptions | null>(null);
   const [state, setState] = useState<WizardState>({
     projectId: projects[0]?.id ?? "",
     partNumberTeam: defaultTeamNumber(),
@@ -77,6 +87,23 @@ export function AddPartWizard({
       }),
     [state.partNumberCode, state.partNumberRobot, state.partNumberTeam, state.partNumberYear]
   );
+  const robotOptions = useMemo(
+    () =>
+      config?.robotNumbers?.filter(
+        (item) => item.teamNumber === state.partNumberTeam && item.seasonYear === state.partNumberYear
+      ) ?? [],
+    [config?.robotNumbers, state.partNumberTeam, state.partNumberYear]
+  );
+
+  useEffect(() => {
+    void fetch("/api/config/options")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load config.");
+        return (await response.json()) as WorkspaceOptions;
+      })
+      .then((data) => setConfig(data))
+      .catch(() => setConfig(null));
+  }, []);
 
   const createPartMutation = useMutation({
     mutationFn: async () => {
@@ -98,7 +125,8 @@ export function AddPartWizard({
       return data;
     },
     onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ["parts"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
       if (data?.id) {
         router.push(`/parts/${data.id}`);
       } else {
@@ -227,47 +255,101 @@ export function AddPartWizard({
           <div className="grid gap-2 md:grid-cols-4">
             <div>
               <label className="mb-1 block text-xs text-steel-300">Team</label>
-              <Input
-                value={state.partNumberTeam}
-                inputMode="numeric"
-                maxLength={4}
-                placeholder="7028"
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    partNumberTeam: event.target.value.replace(/\D/g, "").slice(0, 4)
-                  }))
-                }
-              />
+              {config?.teamNumbers?.length ? (
+                <Select
+                  value={state.partNumberTeam}
+                  onChange={(event) =>
+                    setState((prev) => ({
+                      ...prev,
+                      partNumberTeam: event.target.value
+                    }))
+                  }
+                >
+                  {config.teamNumbers.map((team) => (
+                    <option key={team} value={team}>
+                      {team}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  value={state.partNumberTeam}
+                  inputMode="numeric"
+                  maxLength={TEAM_NUMBER_MAX_LENGTH}
+                  placeholder="7028"
+                  onChange={(event) =>
+                    setState((prev) => ({
+                      ...prev,
+                      partNumberTeam: sanitizeTeamNumber(event.target.value)
+                    }))
+                  }
+                />
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs text-steel-300">Year</label>
-              <Input
-                value={state.partNumberYear}
-                inputMode="numeric"
-                maxLength={4}
-                placeholder={defaultSeasonYear()}
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    partNumberYear: event.target.value.replace(/\D/g, "").slice(0, 4)
-                  }))
-                }
-              />
+              {config?.seasonYears?.length ? (
+                <Select
+                  value={state.partNumberYear}
+                  onChange={(event) =>
+                    setState((prev) => ({
+                      ...prev,
+                      partNumberYear: event.target.value
+                    }))
+                  }
+                >
+                  {config.seasonYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  value={state.partNumberYear}
+                  inputMode="numeric"
+                  maxLength={2}
+                  placeholder={defaultSeasonYear()}
+                  onChange={(event) =>
+                    setState((prev) => ({
+                      ...prev,
+                      partNumberYear: normalizeSeasonYear(event.target.value)
+                    }))
+                  }
+                />
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs text-steel-300">Robot #</label>
-              <Input
-                value={state.partNumberRobot}
-                inputMode="numeric"
-                placeholder="1"
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    partNumberRobot: event.target.value.replace(/\D/g, "")
-                  }))
-                }
-              />
+              {robotOptions.length ? (
+                <Select
+                  value={state.partNumberRobot}
+                  onChange={(event) =>
+                    setState((prev) => ({
+                      ...prev,
+                      partNumberRobot: event.target.value
+                    }))
+                  }
+                >
+                  {robotOptions.map((item) => (
+                    <option key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}`} value={item.robotNumber}>
+                      {item.robotNumber}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  value={state.partNumberRobot}
+                  inputMode="numeric"
+                  placeholder="1"
+                  onChange={(event) =>
+                    setState((prev) => ({
+                      ...prev,
+                      partNumberRobot: event.target.value.replace(/\D/g, "")
+                    }))
+                  }
+                />
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs text-steel-300">Part Code</label>
@@ -374,7 +456,6 @@ export function AddPartWizard({
             </p>
             <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
               {users
-                .filter((user) => user.id !== state.primaryOwnerId)
                 .map((user) => {
                   const checked = state.collaboratorIds.includes(user.id);
                   return (

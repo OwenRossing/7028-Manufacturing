@@ -66,9 +66,15 @@ export function canTransition(from: PartStatus, to: PartStatus): boolean {
   if (from === to) {
     return true;
   }
-  const fromIndex = ORDER.indexOf(from);
-  const toIndex = ORDER.indexOf(to);
-  return fromIndex >= 0 && toIndex >= 0;
+  const allowed: Record<PartStatus, PartStatus[]> = {
+    DESIGNED: ["CUT", "MACHINED", "DONE"],
+    CUT: ["DESIGNED", "MACHINED", "DONE"],
+    MACHINED: ["DESIGNED", "CUT", "ASSEMBLED", "VERIFIED", "DONE"],
+    ASSEMBLED: ["DESIGNED", "MACHINED", "VERIFIED", "DONE"],
+    VERIFIED: ["DESIGNED", "MACHINED", "DONE"],
+    DONE: ["DESIGNED", "MACHINED"]
+  };
+  return allowed[from].includes(to);
 }
 
 export function statusLabel(status: PartStatus): string {

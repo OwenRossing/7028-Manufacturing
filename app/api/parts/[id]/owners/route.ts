@@ -36,13 +36,6 @@ export async function POST(
 
   const collaboratorIds = [...new Set(parsed.data.collaboratorIds)];
 
-  if (
-    parsed.data.primaryOwnerId &&
-    collaboratorIds.includes(parsed.data.primaryOwnerId)
-  ) {
-    return jsonError("Machinist cannot also be listed as a finisher.", 400);
-  }
-
   const updatedPart = await prisma.$transaction(async (tx) => {
     await tx.partOwner.deleteMany({ where: { partId: id } });
 

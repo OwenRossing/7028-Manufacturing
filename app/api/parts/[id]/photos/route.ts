@@ -51,7 +51,8 @@ export async function POST(
   });
   const saved = await storageProvider.save({
     bytes: processed.bytes,
-    originalName: file.name
+    originalName: file.name,
+    mimeType: processed.mimeType
   });
 
   const event = await prisma.partEvent.create({

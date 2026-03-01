@@ -113,7 +113,10 @@ export async function createImportPreviewBatch(
     name: null,
     quantityNeeded: null,
     action: ImportRowAction.ERROR,
-    errorMessage: `Row ${error.row}${error.column ? ` (${error.column})` : ""}: ${error.message}`,
+    errorMessage:
+      error.column === "global"
+        ? `Import error: ${error.message}`
+        : `Row ${error.row}${error.column ? ` (${error.column})` : ""}: ${error.message}`,
     rawJson: error.raw ? ({ raw: error.raw } as Prisma.InputJsonValue) : undefined
   }));
 

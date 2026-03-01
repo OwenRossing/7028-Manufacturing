@@ -3,6 +3,7 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PlusSquare, Upload, X } from "lucide-react";
+import { buildSubsystemPartCode, normalizeSeasonYear, sanitizeTeamNumber } from "@/lib/part-number";
 
 type MenuPoint = {
   x: number;
@@ -27,6 +28,11 @@ type ImportSummary = {
   noChange: number;
   error: number;
   filteredOut: number;
+  filters?: {
+    team: string;
+    year: string;
+    robot: string;
+  };
 };
 
 type WorkspaceOptions = {
@@ -43,17 +49,39 @@ type WorkspaceOptions = {
 };
 
 type UserOption = { id: string; displayName: string; email?: string };
+type MeResponse = { id: string; displayName: string; isAdmin: boolean };
+
+type OnshapeDocumentOption = {
+  id: string;
+  name: string;
+};
+
+type OnshapeWorkspaceOption = {
+  id: string;
+  name: string;
+  type: string;
+};
+
+type OnshapeElementOption = {
+  id: string;
+  name: string;
+  elementType: string;
+};
 
 function normalizeYear(value: string): string {
-  return value.replace(/\D/g, "").slice(0, 4);
+  return normalizeSeasonYear(value);
 }
 
 function buildPartCode(subsystem: string, part: string): string {
-  const subsystemDigits = subsystem.replace(/\D/g, "").slice(0, 2);
-  const partDigits = part.replace(/\D/g, "").slice(0, 3);
-  if (!subsystemDigits || !partDigits) return "";
-  const combined = `${subsystemDigits}${partDigits}`.slice(0, 4);
-  return combined.padStart(4, "0");
+  return buildSubsystemPartCode(subsystem, part);
+}
+
+function formatActiveFilters(
+  filters: ImportSummary["filters"] | undefined,
+  fallback: { team: string; year: string; robot: string }
+): string {
+  const active = filters ?? fallback;
+  return `Team ${active.team} / Year ${active.year} / Robot ${active.robot}`;
 }
 
 export function AddPartControl({ className }: { className?: string }) {
@@ -91,6 +119,20 @@ export function AddPartControl({ className }: { className?: string }) {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [manualOnshapeIds, setManualOnshapeIds] = useState(false);
+  const [documentQuery, setDocumentQuery] = useState("");
+  const [documentId, setDocumentId] = useState("");
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [elementId, setElementId] = useState("");
+  const [documents, setDocuments] = useState<OnshapeDocumentOption[]>([]);
+  const [workspaces, setWorkspaces] = useState<OnshapeWorkspaceOption[]>([]);
+  const [elements, setElements] = useState<OnshapeElementOption[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
+  const [loadingElements, setLoadingElements] = useState(false);
+  const [selectorError, setSelectorError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [roleLoaded, setRoleLoaded] = useState(false);
 
   useEffect(() => {
     function onGlobalClick() {
@@ -111,6 +153,15 @@ export function AddPartControl({ className }: { className?: string }) {
   }, []);
 
   useEffect(() => {
+    void fetch("/api/me")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load current user role.");
+        return (await response.json()) as MeResponse;
+      })
+      .then((data) => setIsAdmin(Boolean(data.isAdmin)))
+      .catch(() => setIsAdmin(false))
+      .finally(() => setRoleLoaded(true));
+
     void fetch("/api/config/options")
       .then(async (response) => {
         if (!response.ok) throw new Error("Unable to load options.");
@@ -151,7 +202,7 @@ export function AddPartControl({ className }: { className?: string }) {
   );
   const fullYear = useMemo(() => normalizeYear(seasonYear), [seasonYear]);
   const partNumberPreview = useMemo(() => {
-    const team = teamNumber.replace(/\D/g, "").slice(0, 4);
+    const team = sanitizeTeamNumber(teamNumber);
     const robot = robotNumber.replace(/\D/g, "").slice(0, 2);
     if (!team || !fullYear || !robot || !partCode) return "";
     return `${team}-${fullYear}-${robot}-${partCode}`;
@@ -163,6 +214,15 @@ export function AddPartControl({ className }: { className?: string }) {
       .filter((item) => item.teamNumber === teamNumber && item.seasonYear === fullYear)
       .map((item) => item.robotNumber);
   }, [config, teamNumber, fullYear]);
+  const teamOptions = config?.teamNumbers?.length ? config.teamNumbers : [teamNumber || "7028"];
+  const yearOptions = config?.seasonYears?.length ? config.seasonYears : [seasonYear || normalizeYear(String(new Date().getFullYear()))];
+  const importRobotOptions = useMemo(() => {
+    if (!config?.robotNumbers?.length) return [importRobotNumber || "1"];
+    const filtered = config.robotNumbers
+      .filter((item) => item.teamNumber === importTeamNumber && item.seasonYear === normalizeYear(importSeasonYear))
+      .map((item) => item.robotNumber);
+    return filtered.length ? filtered : [importRobotNumber || "1"];
+  }, [config?.robotNumbers, importRobotNumber, importSeasonYear, importTeamNumber]);
 
   const subsystemOptions = useMemo(() => {
     if (!config) return [];
@@ -180,11 +240,113 @@ export function AddPartControl({ className }: { className?: string }) {
   }
 
   function openWizard(nextMode: AddMode) {
+    if (!isAdmin && nextMode !== "MANUAL") {
+      setInfo("Admin access required for BOM import and Onshape actions.");
+      setMenuPoint(null);
+      return;
+    }
     setMode(nextMode);
     setInfo(null);
+    setBatchId(null);
+    setRows([]);
+    setSummary(null);
+    setSelectorError(null);
     setWizardOpen(true);
     setMenuPoint(null);
   }
+
+  useEffect(() => {
+    if (!wizardOpen || mode !== "ONSHAPE" || manualOnshapeIds) return;
+
+    const timeout = setTimeout(() => {
+      void (async () => {
+        setLoadingDocuments(true);
+        setSelectorError(null);
+        try {
+          const query = documentQuery.trim();
+          const response = await fetch(
+            query ? `/api/onshape/documents?q=${encodeURIComponent(query)}` : "/api/onshape/documents"
+          );
+          const data = (await response.json().catch(() => null)) as
+            | { error?: string; items?: OnshapeDocumentOption[] }
+            | null;
+          if (!response.ok) {
+            throw new Error(data?.error ?? "Failed to load Onshape documents.");
+          }
+          setDocuments(data?.items ?? []);
+        } catch (fetchError) {
+          setSelectorError(fetchError instanceof Error ? fetchError.message : "Failed to load Onshape documents.");
+          setDocuments([]);
+        } finally {
+          setLoadingDocuments(false);
+        }
+      })();
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [documentQuery, manualOnshapeIds, mode, wizardOpen]);
+
+  useEffect(() => {
+    if (!wizardOpen || mode !== "ONSHAPE" || manualOnshapeIds) return;
+    if (!documentId) {
+      setWorkspaces([]);
+      setWorkspaceId("");
+      setElements([]);
+      setElementId("");
+      return;
+    }
+
+    void (async () => {
+      setLoadingWorkspaces(true);
+      setSelectorError(null);
+      try {
+        const response = await fetch(`/api/onshape/documents/${encodeURIComponent(documentId)}/workspaces`);
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; items?: OnshapeWorkspaceOption[] }
+          | null;
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Failed to load Onshape workspaces.");
+        }
+        setWorkspaces(data?.items ?? []);
+      } catch (fetchError) {
+        setSelectorError(fetchError instanceof Error ? fetchError.message : "Failed to load Onshape workspaces.");
+        setWorkspaces([]);
+      } finally {
+        setLoadingWorkspaces(false);
+      }
+    })();
+  }, [documentId, manualOnshapeIds, mode, wizardOpen]);
+
+  useEffect(() => {
+    if (!wizardOpen || mode !== "ONSHAPE" || manualOnshapeIds) return;
+    if (!documentId || !workspaceId) {
+      setElements([]);
+      setElementId("");
+      return;
+    }
+
+    void (async () => {
+      setLoadingElements(true);
+      setSelectorError(null);
+      try {
+        const response = await fetch(
+          `/api/onshape/documents/${encodeURIComponent(documentId)}/workspaces/${encodeURIComponent(workspaceId)}/elements`
+        );
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; items?: OnshapeElementOption[] }
+          | null;
+        if (!response.ok) {
+          throw new Error(data?.error ?? "Failed to load Onshape elements.");
+        }
+        setElements(data?.items ?? []);
+      } catch (fetchError) {
+        setSelectorError(fetchError instanceof Error ? fetchError.message : "Failed to load Onshape elements.");
+        setElements([]);
+      } finally {
+        setLoadingElements(false);
+      }
+    })();
+  }, [documentId, manualOnshapeIds, mode, workspaceId, wizardOpen]);
 
   async function submitManual() {
     if (!activeProjectId) {
@@ -287,6 +449,45 @@ export function AddPartControl({ className }: { className?: string }) {
     router.refresh();
   }
 
+  async function previewOnshape() {
+    if (!activeProjectId) {
+      setInfo("Select a project first.");
+      return;
+    }
+    if (!documentId.trim() || !workspaceId.trim() || !elementId.trim()) {
+      setInfo("Select document, workspace, and assembly element first.");
+      return;
+    }
+
+    setPreviewBusy(true);
+    setInfo(null);
+    const response = await fetch("/api/imports/bom/onshape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: activeProjectId,
+        documentId,
+        workspaceId,
+        elementId,
+        teamNumber: importTeamNumber,
+        seasonYear: importSeasonYear,
+        robotNumber: importRobotNumber
+      })
+    });
+    const data = (await response.json().catch(() => null)) as
+      | { error?: string; batchId?: string; rows?: PreviewRow[]; summary?: ImportSummary }
+      | null;
+    if (!response.ok || !data?.batchId) {
+      setInfo(data?.error ?? "Onshape preview failed.");
+      setPreviewBusy(false);
+      return;
+    }
+    setBatchId(data.batchId);
+    setRows(data.rows ?? []);
+    setSummary(data.summary ?? null);
+    setPreviewBusy(false);
+  }
+
   return (
     <>
       <button onClick={openMenu} className={className}>
@@ -303,11 +504,19 @@ export function AddPartControl({ className }: { className?: string }) {
           <button onClick={() => openWizard("MANUAL")} className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]">
             Manual
           </button>
-          <button onClick={() => openWizard("ONSHAPE")} className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]">
-            Grab From Onshape
+          <button
+            onClick={() => openWizard("ONSHAPE")}
+            disabled={!isAdmin}
+            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160] disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            Grab From Onshape {!roleLoaded ? "(Loading...)" : isAdmin ? "" : "(Admin only)"}
           </button>
-          <button onClick={() => openWizard("IMPORT_CSV")} className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]">
-            Import BOM CSV
+          <button
+            onClick={() => openWizard("IMPORT_CSV")}
+            disabled={!isAdmin}
+            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160] disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            Import BOM CSV {!roleLoaded ? "(Loading...)" : isAdmin ? "" : "(Admin only)"}
           </button>
         </div>
       ) : null}
@@ -325,7 +534,7 @@ export function AddPartControl({ className }: { className?: string }) {
                     ? "Set fields and create the part."
                     : mode === "IMPORT_CSV"
                     ? "Upload CSV, preview changes, then commit."
-                    : "Direct Onshape API import (coming next)."}
+                    : "Select Onshape document/workspace/assembly, preview changes, then commit."}
                 </p>
               </div>
               <button
@@ -349,66 +558,39 @@ export function AddPartControl({ className }: { className?: string }) {
                   </div>
                   <div>
                     <label className="mb-1 block text-sm text-[#9aa8b8]">Team #</label>
-                    {config?.teamNumbers?.length ? (
-                      <select
-                        value={teamNumber}
-                        onChange={(event) => setTeamNumber(event.target.value)}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                      >
-                        {config.teamNumbers.map((value) => (
-                          <option key={value} value={value}>{value}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        value={teamNumber}
-                        onChange={(event) => setTeamNumber(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                        inputMode="numeric"
-                      />
-                    )}
+                    <select
+                      value={teamNumber}
+                      onChange={(event) => setTeamNumber(event.target.value)}
+                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                    >
+                      {teamOptions.map((value) => (
+                        <option key={value} value={value}>{value}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm text-[#9aa8b8]">Year (25, 26...)</label>
-                    {config?.seasonYears?.length ? (
-                      <select
-                        value={seasonYear}
-                        onChange={(event) => setSeasonYear(event.target.value)}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                      >
-                        {config.seasonYears.map((value) => (
-                          <option key={value} value={value}>{value}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        value={seasonYear}
-                        onChange={(event) => setSeasonYear(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                        inputMode="numeric"
-                      />
-                    )}
+                    <select
+                      value={seasonYear}
+                      onChange={(event) => setSeasonYear(event.target.value)}
+                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                    >
+                      {yearOptions.map((value) => (
+                        <option key={value} value={value}>{value}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm text-[#9aa8b8]">Robot #</label>
-                    {robotOptions.length ? (
-                      <select
-                        value={robotNumber}
-                        onChange={(event) => setRobotNumber(event.target.value)}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                      >
-                        {robotOptions.map((value) => (
-                          <option key={value} value={value}>{value}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        value={robotNumber}
-                        onChange={(event) => setRobotNumber(event.target.value.replace(/\D/g, "").slice(0, 2))}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                        inputMode="numeric"
-                      />
-                    )}
+                    <select
+                      value={robotNumber}
+                      onChange={(event) => setRobotNumber(event.target.value)}
+                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                    >
+                      {(robotOptions.length ? robotOptions : [robotNumber || "1"]).map((value) => (
+                        <option key={value} value={value}>{value}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm text-[#9aa8b8]">Subsystem #</label>
@@ -421,14 +603,14 @@ export function AddPartControl({ className }: { className?: string }) {
                         <option value="">Select subsystem</option>
                         {subsystemOptions.map((item) => (
                           <option key={item.subsystemNumber} value={item.subsystemNumber}>
-                            {item.subsystemNumber}{item.label ? ` - ${item.label}` : ""}
+                            {item.subsystemNumber}000{item.label ? ` - ${item.label}` : ""}
                           </option>
                         ))}
                       </select>
                     ) : (
                       <input
                         value={subsystemNumber}
-                        onChange={(event) => setSubsystemNumber(event.target.value.replace(/\D/g, "").slice(0, 2))}
+                        onChange={(event) => setSubsystemNumber(event.target.value.replace(/\D/g, "").slice(0, 1))}
                         className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
                         inputMode="numeric"
                       />
@@ -508,7 +690,7 @@ export function AddPartControl({ className }: { className?: string }) {
                       className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
                     >
                       <option value="">Unassigned</option>
-                      {users.filter((user) => user.id !== machinistId).map((user) => (
+                      {users.map((user) => (
                         <option key={user.id} value={user.id}>{user.displayName}</option>
                       ))}
                     </select>
@@ -518,73 +700,45 @@ export function AddPartControl({ className }: { className?: string }) {
 
               {mode === "IMPORT_CSV" ? (
                 <div className="space-y-3">
+                  <p className="text-xs text-[#9aa8b8]">
+                    CSV and Onshape API previews can differ if source fields differ or Team/Year/Robot filters exclude rows.
+                  </p>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-sm text-[#9aa8b8]">Team #</label>
-                      {config?.teamNumbers?.length ? (
-                        <select
-                          value={importTeamNumber}
-                          onChange={(event) => setImportTeamNumber(event.target.value)}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                        >
-                          {config.teamNumbers.map((value) => (
-                            <option key={value} value={value}>{value}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          value={importTeamNumber}
-                          onChange={(event) => setImportTeamNumber(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                          inputMode="numeric"
-                        />
-                      )}
+                      <select
+                        value={importTeamNumber}
+                        onChange={(event) => setImportTeamNumber(event.target.value)}
+                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      >
+                        {teamOptions.map((value) => (
+                          <option key={value} value={value}>{value}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="mb-1 block text-sm text-[#9aa8b8]">Year</label>
-                      {config?.seasonYears?.length ? (
-                        <select
-                          value={importSeasonYear}
-                          onChange={(event) => setImportSeasonYear(event.target.value)}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                        >
-                          {config.seasonYears.map((value) => (
-                            <option key={value} value={value}>{value}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          value={importSeasonYear}
-                          onChange={(event) => setImportSeasonYear(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                          inputMode="numeric"
-                        />
-                      )}
+                      <select
+                        value={importSeasonYear}
+                        onChange={(event) => setImportSeasonYear(event.target.value)}
+                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      >
+                        {yearOptions.map((value) => (
+                          <option key={value} value={value}>{value}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="mb-1 block text-sm text-[#9aa8b8]">Robot #</label>
-                      {config?.robotNumbers?.length ? (
-                        <select
-                          value={importRobotNumber}
-                          onChange={(event) => setImportRobotNumber(event.target.value)}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                        >
-                          {config.robotNumbers
-                            .filter((item) => item.teamNumber === importTeamNumber && item.seasonYear === normalizeYear(importSeasonYear))
-                            .map((item) => (
-                              <option key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}`} value={item.robotNumber}>
-                                {item.robotNumber}
-                              </option>
-                            ))}
-                        </select>
-                      ) : (
-                        <input
-                          value={importRobotNumber}
-                          onChange={(event) => setImportRobotNumber(event.target.value.replace(/\D/g, "").slice(0, 2))}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
-                          inputMode="numeric"
-                        />
-                      )}
+                      <select
+                        value={importRobotNumber}
+                        onChange={(event) => setImportRobotNumber(event.target.value)}
+                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      >
+                        {importRobotOptions.map((value) => (
+                          <option key={value} value={value}>{value}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <input
@@ -605,7 +759,12 @@ export function AddPartControl({ className }: { className?: string }) {
                   {summary ? (
                     <p className="text-sm text-[#9aa8b8]">
                       Rows: {summary.total}, Create: {summary.create}, Update: {summary.update}, No change:{" "}
-                      {summary.noChange}, Errors: {summary.error}
+                      {summary.noChange}, Errors: {summary.error}, Filtered out: {summary.filteredOut}. Active filter:{" "}
+                      {formatActiveFilters(summary.filters, {
+                        team: importTeamNumber,
+                        year: importSeasonYear,
+                        robot: importRobotNumber
+                      })}
                     </p>
                   ) : null}
                   {rows.length ? (
@@ -613,6 +772,7 @@ export function AddPartControl({ className }: { className?: string }) {
                       {rows.slice(0, 18).map((row) => (
                         <p key={row.rowIndex}>
                           #{row.rowIndex} {row.partNumber ?? "-"} {row.name ?? "-"} ({row.action})
+                          {row.errorMessage ? ` - ${row.errorMessage}` : ""}
                         </p>
                       ))}
                     </div>
@@ -621,9 +781,146 @@ export function AddPartControl({ className }: { className?: string }) {
               ) : null}
 
               {mode === "ONSHAPE" ? (
-                <p className="rounded-[3px] border border-yellow-500/40 bg-yellow-500/15 px-3 py-2 text-sm text-yellow-100">
-                  Onshape API import is not wired yet. Use Import BOM CSV in this modal for now.
-                </p>
+                <div className="space-y-3">
+                  <p className="text-xs text-[#9aa8b8]">
+                    Onshape API and CSV export previews may not match when payload shape differs or Team/Year/Robot filters drop rows.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm text-[#9aa8b8]">
+                    <input
+                      type="checkbox"
+                      checked={manualOnshapeIds}
+                      onChange={(event) => setManualOnshapeIds(event.target.checked)}
+                    />
+                    Enter IDs manually
+                  </label>
+                  {manualOnshapeIds ? (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-sm text-[#9aa8b8]">Document ID</label>
+                        <input
+                          value={documentId}
+                          onChange={(event) => setDocumentId(event.target.value)}
+                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm text-[#9aa8b8]">Workspace ID</label>
+                        <input
+                          value={workspaceId}
+                          onChange={(event) => setWorkspaceId(event.target.value)}
+                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm text-[#9aa8b8]">Assembly Element ID</label>
+                        <input
+                          value={elementId}
+                          onChange={(event) => setElementId(event.target.value)}
+                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm text-[#9aa8b8]">Search Documents</label>
+                        <input
+                          value={documentQuery}
+                          onChange={(event) => setDocumentQuery(event.target.value)}
+                          placeholder="Start typing a document name"
+                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-sm text-[#9aa8b8]">Document</label>
+                          <select
+                            value={documentId}
+                            onChange={(event) => {
+                              setDocumentId(event.target.value);
+                              setWorkspaceId("");
+                              setElementId("");
+                              setWorkspaces([]);
+                              setElements([]);
+                            }}
+                            className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                            disabled={loadingDocuments}
+                          >
+                            <option value="">{loadingDocuments ? "Loading documents..." : "Select document"}</option>
+                            {documents.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm text-[#9aa8b8]">Workspace</label>
+                          <select
+                            value={workspaceId}
+                            onChange={(event) => {
+                              setWorkspaceId(event.target.value);
+                              setElementId("");
+                              setElements([]);
+                            }}
+                            className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                            disabled={!documentId || loadingWorkspaces}
+                          >
+                            <option value="">
+                              {!documentId ? "Pick document first" : loadingWorkspaces ? "Loading workspaces..." : "Select workspace"}
+                            </option>
+                            {workspaces.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm text-[#9aa8b8]">Assembly Element</label>
+                          <select
+                            value={elementId}
+                            onChange={(event) => setElementId(event.target.value)}
+                            className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                            disabled={!workspaceId || loadingElements}
+                          >
+                            <option value="">
+                              {!workspaceId ? "Pick workspace first" : loadingElements ? "Loading elements..." : "Select assembly element"}
+                            </option>
+                            {elements.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {selectorError ? (
+                    <p className="rounded-[3px] border border-red-500/40 bg-red-500/15 px-3 py-2 text-sm text-red-200">
+                      {selectorError}
+                    </p>
+                  ) : null}
+                  {!manualOnshapeIds && !loadingElements && workspaceId && !elements.length ? (
+                    <p className="text-sm text-[#9aa8b8]">No assembly elements found in this workspace.</p>
+                  ) : null}
+                  {summary ? (
+                    <p className="text-sm text-[#9aa8b8]">
+                      Rows: {summary.total}, Create: {summary.create}, Update: {summary.update}, No change:{" "}
+                      {summary.noChange}, Errors: {summary.error}, Filtered out: {summary.filteredOut}. Active filter:{" "}
+                      {formatActiveFilters(summary.filters, {
+                        team: importTeamNumber,
+                        year: importSeasonYear,
+                        robot: importRobotNumber
+                      })}
+                    </p>
+                  ) : null}
+                  {rows.length ? (
+                    <div className="max-h-48 overflow-y-auto rounded-[4px] border border-[#3f4a5b] bg-[#202833] p-2 text-xs text-[#dcdedf]">
+                      {rows.slice(0, 18).map((row) => (
+                        <p key={row.rowIndex}>
+                          #{row.rowIndex} {row.partNumber ?? "-"} {row.name ?? "-"} ({row.action})
+                          {row.errorMessage ? ` - ${row.errorMessage}` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               {info ? (
@@ -653,6 +950,24 @@ export function AddPartControl({ className }: { className?: string }) {
                 <>
                   <button
                     onClick={previewCsv}
+                    disabled={previewBusy}
+                    className="rounded-[4px] border border-[#3f4a5b] bg-[#202833] px-4 py-2 text-[#dcdedf] hover:bg-[#273140] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {previewBusy ? "Previewing..." : "Preview"}
+                  </button>
+                  <button
+                    onClick={commitCsv}
+                    disabled={!batchId || commitBusy}
+                    className="rounded-[4px] border border-[#2f6eb6] bg-[#1a9fff] px-4 py-2 text-white hover:bg-[#3aaeff] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {commitBusy ? "Committing..." : "Commit"}
+                  </button>
+                </>
+              ) : null}
+              {mode === "ONSHAPE" ? (
+                <>
+                  <button
+                    onClick={previewOnshape}
                     disabled={previewBusy}
                     className="rounded-[4px] border border-[#3f4a5b] bg-[#202833] px-4 py-2 text-[#dcdedf] hover:bg-[#273140] disabled:cursor-not-allowed disabled:opacity-60"
                   >

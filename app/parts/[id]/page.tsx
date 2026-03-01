@@ -49,11 +49,10 @@ export default async function PartDetailPage({
   const collaboratorIds = part.owners
     .filter((owner) => owner.role === "COLLABORATOR")
     .map((owner) => owner.userId);
-  const isOwner = Boolean(currentUserId && part.owners.some((owner) => owner.userId === currentUserId));
   const isAdmin = currentUserId ? await isAdminUser(currentUserId) : false;
 
-  const machinedBy = latestActorForStatus(part.events, PartStatus.MACHINED);
-  const finishedBy = latestActorForStatus(part.events, PartStatus.DONE);
+  const lastMachinedBy = latestActorForStatus(part.events, PartStatus.MACHINED);
+  const lastFinishedBy = latestActorForStatus(part.events, PartStatus.DONE);
 
   return (
     <section className="space-y-4 p-4">
@@ -81,10 +80,10 @@ export default async function PartDetailPage({
           originalName: photo.originalName
         }))}
         users={users}
-        isOwner={isOwner}
+        currentUserId={currentUserId ?? null}
         isAdmin={isAdmin}
-        machinedBy={machinedBy}
-        finishedBy={finishedBy}
+        lastMachinedBy={lastMachinedBy}
+        lastFinishedBy={lastFinishedBy}
       />
     </section>
   );

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   return NextResponse.json({
-    items: users.map((user) => ({
+    items: users.map((user: { id: string; email: string; displayName: string; createdAt: Date }) => ({
       ...user,
       isAdmin: adminEmails.has(user.email.toLowerCase()),
       isSelf: user.id === userResult

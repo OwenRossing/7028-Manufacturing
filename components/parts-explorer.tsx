@@ -2,9 +2,9 @@
 
 import { PartStatus } from "@prisma/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { Search, ChevronDown, X, Settings, ArrowLeft } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Search, ChevronDown, X, Settings } from "lucide-react";
 import {
   canonicalStatusForStage,
   stageLabel,
@@ -13,12 +13,19 @@ import {
   type WorkflowStage
 } from "@/lib/status";
 import { PartListItem } from "@/types/parts";
+import { queryKeys } from "@/lib/query-keys";
+import { mediaUrlFromStorageKey } from "@/lib/media-url";
 
 type PartsResponse = {
   items: PartListItem[];
   total: number;
   page: number;
   pageSize: number;
+};
+type MeResponse = {
+  id: string;
+  displayName: string;
+  isAdmin: boolean;
 };
 
 type NoteMessage = {
@@ -39,6 +46,9 @@ type PreviewMedia = {
 type PriorityTier = "ASAP" | "NORMAL" | "BACKBURNER";
 type MainView = "HOME" | "STAGE" | "DETAIL" | "OVERVIEW";
 type SubsystemKey = string;
+const MOBILE_BREAKPOINT = 1024;
+const EDGE_SWIPE_CLOSE_PX = 80;
+const EDGE_SWIPE_INTENT_RATIO = 1.5;
 
 function stageCollectionLabel(stage: WorkflowStage): string {
   return stageLabel(stage).toUpperCase();
@@ -126,9 +136,17 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const detailScrollRef = useRef<HTMLDivElement | null>(null);
   const installBarRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const closeSwipeActiveRef = useRef(false);
+  const closeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const previousProjectIdRef = useRef<string | null>(null);
+  const previousListViewRef = useRef<MainView>("HOME");
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const paramsString = searchParams.toString();
   const projectId = searchParams.get("projectId");
+  const partIdFromQuery = searchParams.get("partId");
   const activeTab = searchParams.get("tab");
   const search = (searchParams.get("q") ?? "").trim().toLowerCase();
 
@@ -162,11 +180,9 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const [noteMessages, setNoteMessages] = useState<NoteMessage[]>([]);
   const [feedback, setFeedback] = useState<{ kind: "error" | "warning"; text: string } | null>(null);
   const [detailPhotos, setDetailPhotos] = useState<DetailPhoto[]>([]);
-  const [uiMode, setUiMode] = useState<"auto" | "mobile" | "desktop">("auto");
   const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null);
-  const [viewportWidth, setViewportWidth] = useState(1440);
-  const [mobilePane, setMobilePane] = useState<"LIST" | "DETAIL">("LIST");
-  const touchStartXRef = useRef<number | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(MOBILE_BREAKPOINT);
+  const mobileActive = viewportWidth < MOBILE_BREAKPOINT;
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -176,13 +192,24 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   }, [projectId]);
 
   const query = useQuery({
-    queryKey: ["parts", queryString],
+    queryKey: queryKeys.parts.list(queryString),
     queryFn: async () => {
       const response = await fetch(`/api/parts?${queryString}`);
       if (!response.ok) throw new Error("Unable to load parts.");
       return (await response.json()) as PartsResponse;
-    }
+    },
+    refetchInterval: 10_000
   });
+  const meQuery = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const response = await fetch("/api/me");
+      if (!response.ok) throw new Error("Unable to load current user.");
+      return (await response.json()) as MeResponse;
+    },
+    enabled: Boolean(currentUserId)
+  });
+  const isAdmin = Boolean(meQuery.data?.isAdmin);
 
   const [liveItems, setLiveItems] = useState<PartListItem[]>([]);
   useEffect(() => {
@@ -271,8 +298,16 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     () => selectedPart?.owners.find((owner) => owner.role === "PRIMARY")?.user.displayName ?? "Unassigned",
     [selectedPart]
   );
+  const selectedPrimaryOwnerId = useMemo(
+    () => selectedPart?.owners.find((owner) => owner.role === "PRIMARY")?.userId ?? null,
+    [selectedPart]
+  );
   const selectedCollaborators = useMemo(
     () => selectedPart?.owners.filter((owner) => owner.role === "COLLABORATOR").map((owner) => owner.user.displayName) ?? [],
+    [selectedPart]
+  );
+  const selectedCollaboratorIds = useMemo(
+    () => selectedPart?.owners.filter((owner) => owner.role === "COLLABORATOR").map((owner) => owner.userId) ?? [],
     [selectedPart]
   );
   const selectedCollaboratorLabel = selectedCollaborators.length
@@ -280,7 +315,22 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       ? selectedCollaborators.join(", ")
       : `${selectedCollaborators.slice(0, 2).join(", ")} +${selectedCollaborators.length - 2}`
     : "None";
-  const selectedFinisherName = selectedCollaborators[0] ?? "Unassigned";
+  const selectedFinisherName = selectedCollaborators.length ? selectedCollaboratorLabel : "Unassigned";
+  const canEditPart = useCallback(
+    (part: PartListItem | null) =>
+      Boolean(part && (isAdmin || (currentUserId && part.owners.some((owner) => owner.userId === currentUserId)))),
+    [currentUserId, isAdmin]
+  );
+  const canEditSelectedPart = canEditPart(selectedPart);
+  const readOnlyReason = !currentUserId
+    ? "Read-only: sign in to claim or edit this part."
+    : "Read-only: claim machinist or finisher, or ask an assigned user/admin.";
+  const canClaimMachinist = Boolean(currentUserId && selectedPart && !selectedPrimaryOwnerId);
+  const canClaimFinisher = Boolean(
+    currentUserId &&
+      selectedPart &&
+      selectedCollaboratorIds.length === 0
+  );
 
   const stageForItem = (part: PartListItem): WorkflowStage => statusToStage(part.status, part.owners.length > 0);
 
@@ -289,53 +339,48 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       setView("OVERVIEW");
       return;
     }
+    if (activeTab === "board") {
+      setView("STAGE");
+      return;
+    }
     setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab || partIdFromQuery) return;
+    const nextParams = new URLSearchParams(paramsString);
+    nextParams.set("tab", "board");
+    const nextHref = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
+    router.replace(nextHref, { scroll: false });
+  }, [activeTab, paramsString, partIdFromQuery, pathname, router]);
+
+  useEffect(() => {
+    if (activeTab === "overview" || activeTab === "community" || activeTab === "board") return;
+    if (partIdFromQuery || (mobileActive && view === "DETAIL" && Boolean(selectedPartId))) {
+      setView("DETAIL");
+      return;
+    }
+    setView((prev) => (prev === "DETAIL" ? "HOME" : prev));
+  }, [activeTab, mobileActive, partIdFromQuery, selectedPartId, view]);
+
+  useEffect(() => {
+    if (partIdFromQuery) {
+      setSelectedPartId(partIdFromQuery);
+      return;
+    }
     if (!selectedPartId && sorted.length) {
       setSelectedPartId(sorted[0].id);
+      return;
     }
     if (selectedPartId && !sorted.some((part) => part.id === selectedPartId)) {
       setSelectedPartId(sorted[0]?.id ?? null);
     }
-  }, [selectedPartId, sorted]);
+  }, [partIdFromQuery, selectedPartId, sorted]);
 
   useEffect(() => {
     if (view !== "DETAIL") return;
     setDetailPanel("main");
   }, [selectedPartId, view]);
-
-  useEffect(() => {
-    function applyMode(mode: "auto" | "mobile" | "desktop") {
-      setUiMode(mode);
-    }
-
-    try {
-      const stored = window.localStorage.getItem("ui-mode");
-      if (stored === "mobile" || stored === "desktop" || stored === "auto") {
-        applyMode(stored);
-      }
-    } catch {
-      applyMode("auto");
-    }
-
-    const onMode = (event: Event) => {
-      const detail = (event as CustomEvent<"auto" | "mobile" | "desktop">).detail;
-      if (detail === "mobile" || detail === "desktop" || detail === "auto") applyMode(detail);
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== "ui-mode") return;
-      const value = event.newValue;
-      if (value === "mobile" || value === "desktop" || value === "auto") applyMode(value);
-    };
-    window.addEventListener("ui-mode-change", onMode as EventListener);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener("ui-mode-change", onMode as EventListener);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
 
   useEffect(() => {
     const apply = () => setViewportWidth(window.innerWidth);
@@ -345,15 +390,19 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   }, []);
 
   useEffect(() => {
-    const onPopState = () => {
-      const isMobile = uiMode === "mobile" || (uiMode === "auto" && viewportWidth < 1024);
-      if (isMobile) {
-        setMobilePane("LIST");
-      }
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [uiMode, viewportWidth]);
+    const previousProjectId = previousProjectIdRef.current;
+    if (!previousProjectId) {
+      previousProjectIdRef.current = projectId;
+      return;
+    }
+    if (previousProjectId !== projectId && partIdFromQuery) {
+      const nextParams = new URLSearchParams(paramsString);
+      nextParams.delete("partId");
+      const nextHref = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
+      router.replace(nextHref, { scroll: false });
+    }
+    previousProjectIdRef.current = projectId;
+  }, [paramsString, partIdFromQuery, pathname, projectId, router]);
 
   useEffect(() => {
     if (!selectedPartId) {
@@ -433,13 +482,15 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       setFeedback({ kind: "error", text: error.message || "Unable to move part. Try again." });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["parts", queryString] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
     }
   });
 
   const settingsMutation = useMutation({
     mutationFn: async () => {
       if (!selectedPart) throw new Error("No part selected.");
+      if (!canEditSelectedPart) throw new Error(readOnlyReason);
       const payload = {
         name: editName.trim(),
         partNumber: editPartNumber.trim(),
@@ -474,7 +525,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         )
       );
       setFeedback({ kind: "warning", text: "Settings saved." });
-      void queryClient.invalidateQueries({ queryKey: ["parts", queryString] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
     },
     onError: (error: Error) => {
       setFeedback({ kind: "error", text: error.message || "Unable to save settings." });
@@ -484,6 +536,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const quickQtyMutation = useMutation({
     mutationFn: async (nextComplete: number) => {
       if (!selectedPart) throw new Error("No part selected.");
+      if (!canEditSelectedPart) throw new Error(readOnlyReason);
       const response = await fetch(`/api/parts/${selectedPart.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -507,7 +560,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         )
       );
       setFeedback({ kind: "warning", text: "Quantity updated." });
-      void queryClient.invalidateQueries({ queryKey: ["parts", queryString] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
     },
     onError: (error: Error) => setFeedback({ kind: "error", text: error.message || "Unable to update quantity." })
   });
@@ -515,6 +569,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const uploadPhotoMutation = useMutation({
     mutationFn: async (file: File) => {
       if (!selectedPart) throw new Error("No part selected.");
+      if (!canEditSelectedPart) throw new Error(readOnlyReason);
       const formData = new FormData();
       formData.set("file", file);
       const response = await fetch(`/api/parts/${selectedPart.id}/photos`, { method: "POST", body: formData });
@@ -531,14 +586,63 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         if (selectedPart && !photoForPart(selectedPart)) setThumbnail(selectedPart.id, photo.storageKey);
       }
       setFeedback({ kind: "warning", text: "File uploaded." });
-      void queryClient.invalidateQueries({ queryKey: ["parts", queryString] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
     },
     onError: (error: Error) => setFeedback({ kind: "error", text: error.message || "Unable to upload file." })
+  });
+
+  const claimMachinistMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedPart) throw new Error("No part selected.");
+      const response = await fetch(`/api/parts/${selectedPart.id}/claim-machinist`, {
+        method: "POST"
+      });
+      const data = (await response.json().catch(() => null)) as (PartListItem & { error?: string }) | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to claim machinist.");
+      return data;
+    },
+    onMutate: () => setFeedback(null),
+    onSuccess: (updated) => {
+      if (updated?.id) {
+        setLiveItems((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+      }
+      setFeedback({ kind: "warning", text: "Machinist claimed." });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
+    },
+    onError: (error: Error) => setFeedback({ kind: "error", text: error.message || "Unable to claim machinist." })
+  });
+
+  const claimFinisherMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedPart) throw new Error("No part selected.");
+      const response = await fetch(`/api/parts/${selectedPart.id}/claim-finisher`, {
+        method: "POST"
+      });
+      const data = (await response.json().catch(() => null)) as (PartListItem & { error?: string }) | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to claim finisher.");
+      return data;
+    },
+    onMutate: () => setFeedback(null),
+    onSuccess: (updated) => {
+      if (updated?.id) {
+        setLiveItems((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+      }
+      setFeedback({ kind: "warning", text: "Finisher claimed." });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
+    },
+    onError: (error: Error) => setFeedback({ kind: "error", text: error.message || "Unable to claim finisher." })
   });
 
   function requestStageMove(partId: string, toStatus: PartStatus, targetStage?: WorkflowStage) {
     const item = liveItems.find((part) => part.id === partId);
     if (!item) return;
+    if (!canEditPart(item)) {
+      setFeedback({ kind: "warning", text: readOnlyReason });
+      return;
+    }
     if (targetStage === "UNASSIGNED" && item.owners.length > 0) {
       setFeedback({ kind: "warning", text: "Clear machinist/finisher in settings before moving to Unassigned." });
       return;
@@ -562,6 +666,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   }
 
   async function setThumbnail(partId: string, storageKey: string) {
+    const item = liveItems.find((part) => part.id === partId) ?? null;
+    if (!canEditPart(item)) {
+      setFeedback({ kind: "warning", text: readOnlyReason });
+      return;
+    }
     setFeedback(null);
     const response = await fetch(`/api/parts/${partId}/thumbnail`, {
       method: "POST",
@@ -586,7 +695,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       )
     );
     setFeedback({ kind: "warning", text: "Thumbnail updated." });
-    void queryClient.invalidateQueries({ queryKey: ["parts", queryString] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
   }
 
   function isVideoPhoto(photo: DetailPhoto): boolean {
@@ -602,24 +711,33 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     setPreviewMedia({ storageKey: photo.storageKey, mimeType: photo.mimeType });
   }
 
-  function shellLayoutClass(): string {
-    if (uiMode === "mobile") return "grid-cols-1 grid-rows-[1fr]";
-    if (uiMode === "desktop") return "grid-cols-[392px_1fr] grid-rows-1";
-    return "grid-cols-1 grid-rows-[1fr] lg:grid-cols-[392px_1fr] lg:grid-rows-1";
-  }
+  const setPartIdQuery = useCallback((nextPartId: string | null, historyMode: "push" | "replace") => {
+    const nextParams = new URLSearchParams(paramsString);
+    if (nextPartId) nextParams.set("partId", nextPartId);
+    else nextParams.delete("partId");
+    const nextHref = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
+    if (historyMode === "push") router.push(nextHref, { scroll: false });
+    else router.replace(nextHref, { scroll: false });
+  }, [paramsString, pathname, router]);
 
   function openPartDetail(partId: string) {
+    if (view !== "DETAIL") {
+      previousListViewRef.current = view;
+    }
     setSelectedPartId(partId);
     setView("DETAIL");
     setDetailPanel("main");
-    if (mobileActive) {
-      setMobilePane("DETAIL");
-      window.history.pushState({ mobileDetail: true }, "");
+    if (!mobileActive) {
+      setPartIdQuery(partId, "push");
     }
   }
 
   function closeMobileDetail() {
-    setMobilePane("LIST");
+    const fallbackView = previousListViewRef.current === "DETAIL" ? "HOME" : previousListViewRef.current;
+    setView(fallbackView);
+    if (!mobileActive) {
+      setPartIdQuery(null, "replace");
+    }
   }
 
   function postNoteMessage() {
@@ -656,11 +774,9 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     : sorted
   ).slice(0, 10);
 
-  const stageItems = useMemo(
-    () => sorted.filter((part) => stageForItem(part) === activeStage),
-    [sorted, activeStage]
-  );
-  const mobileActive = uiMode === "mobile" || (uiMode === "auto" && viewportWidth < 1024);
+  const stageItems = useMemo(() => sorted.filter((part) => stageForItem(part) === activeStage), [sorted, activeStage]);
+  const mobileDetailOpen = mobileActive && view === "DETAIL" && Boolean(selectedPartId);
+  const mobileBoardMode = mobileActive && activeTab === "board";
   const communityLeaderboard = useMemo(() => {
     const counts = new Map<string, { total: number; completed: number }>();
     for (const part of sorted) {
@@ -677,10 +793,67 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       .slice(0, 12);
   }, [sorted]);
 
+  useEffect(() => {
+    if (!partIdFromQuery || query.isPending) return;
+    const exists = sorted.some((part) => part.id === partIdFromQuery);
+    if (exists) return;
+    setFeedback({ kind: "warning", text: "Part not found." });
+    setPartIdQuery(null, "replace");
+  }, [partIdFromQuery, query.isPending, setPartIdQuery, sorted]);
+
+  function onDetailTouchStart(event: TouchEvent<HTMLDivElement>) {
+    if (!mobileDetailOpen) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("input, textarea, select, button, a, [role='button']")) return;
+    closeSwipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+    closeSwipeActiveRef.current = true;
+  }
+
+  function onDetailTouchMove(event: TouchEvent<HTMLDivElement>) {
+    if (!mobileDetailOpen || !closeSwipeActiveRef.current) return;
+    const start = closeSwipeStartRef.current;
+    const touch = event.touches[0];
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dx <= 0) {
+      closeSwipeActiveRef.current = false;
+      return;
+    }
+    if (Math.abs(dx) <= Math.abs(dy) * EDGE_SWIPE_INTENT_RATIO) {
+      closeSwipeActiveRef.current = false;
+    }
+  }
+
+  function onDetailTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    if (!mobileDetailOpen) return;
+    const start = closeSwipeStartRef.current;
+    const touch = event.changedTouches[0];
+    closeSwipeStartRef.current = null;
+    if (!closeSwipeActiveRef.current || !start || !touch) {
+      closeSwipeActiveRef.current = false;
+      return;
+    }
+    closeSwipeActiveRef.current = false;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dx >= EDGE_SWIPE_CLOSE_PX && Math.abs(dx) > Math.abs(dy) * EDGE_SWIPE_INTENT_RATIO) {
+      closeMobileDetail();
+    }
+  }
+
   return (
-    <section className={`grid h-[calc(100dvh-104px)] min-h-0 overflow-hidden ${shellLayoutClass()}`}>
-      <aside className="flex h-full min-h-0 flex-col border-r border-[#0e141b] bg-[#24282f]">
-        <div className="bg-[#171d25] px-2 pb-3 pt-2">
+    <section className="relative grid h-[calc(100dvh-104px)] min-h-0 overflow-hidden grid-cols-1 grid-rows-[1fr] lg:grid-cols-[392px_1fr] lg:grid-rows-1">
+      <aside
+        className={`relative z-30 h-full min-h-0 flex-col border-r border-[#0e141b] bg-[#24282f] ${
+          mobileBoardMode
+            ? "absolute inset-0 flex w-full border-r-0"
+            : "hidden lg:flex"
+        } ${mobileBoardMode ? "z-10" : ""}`}
+      >
+        <div className={`bg-[#171d25] px-2 pb-3 pt-2 ${mobileBoardMode && mobileDetailOpen ? "hidden" : ""}`}>
           <button
             type="button"
             onClick={() => setView("HOME")}
@@ -701,7 +874,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </button>
             </div>
             {typeMenuOpen ? (
-              <div className="absolute left-0 top-full z-10 mt-1 w-full border border-[#5a6473] bg-[#3d4a5d] p-2 text-sm text-[#c7d5e0]">
+              <div className="absolute left-0 top-full z-[70] mt-1 w-full border border-[#5a6473] bg-[#3d4a5d] p-2 text-sm text-[#c7d5e0]">
                 <label className="mb-2 flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -858,9 +1031,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         event.dataTransfer.effectAllowed = "move";
                       }}
                       onClick={() => {
-                        setSelectedPartId(part.id);
-                        setView("DETAIL");
-                        setDetailPanel("main");
+                        openPartDetail(part.id);
                       }}
                       className={`mr-2 flex w-[calc(100%-8px)] items-center gap-2 px-5 py-[3px] text-left ${
                         selectedPartId === part.id && view === "DETAIL"
@@ -874,7 +1045,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                             <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-[#9fb0c2]">V</div>
                           ) : (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
+                            <img src={mediaUrlFromStorageKey(part.photos[0].storageKey)} alt={part.name} className="h-full w-full object-cover" />
                           )
                         ) : null}
                       </span>
@@ -893,8 +1064,17 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
           })}
         </div>
       </aside>
-
-      <div className="h-full min-h-0 overflow-hidden bg-steel-850">
+      <div
+        className={`h-full min-h-0 overflow-hidden bg-steel-850 ${
+          mobileBoardMode && !mobileDetailOpen ? "hidden" : ""
+        } ${
+          mobileActive && view === "DETAIL"
+            ? "absolute inset-0 z-30 w-full border-l-0 shadow-none transition-transform duration-200 ease-out"
+            : ""
+        } ${
+          mobileActive && view === "DETAIL" && !mobileDetailOpen ? "translate-x-full pointer-events-none" : ""
+        } relative z-10`}
+      >
         {feedback ? (
           <div className="pointer-events-none fixed right-4 top-[62px] z-[60]">
             <div
@@ -923,15 +1103,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     key={part.id}
                     type="button"
                     onClick={() => {
-                      setSelectedPartId(part.id);
-                      setView("DETAIL");
-                      setDetailPanel("main");
+                      openPartDetail(part.id);
                     }}
                     className={`relative h-[184px] overflow-hidden border text-left ${priorityClass(part.priority)}`}
                   >
                     {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
+                      <img src={mediaUrlFromStorageKey(part.photos[0].storageKey)} alt={part.name} className="h-full w-full object-cover" />
                     ) : (
                       <div className="h-full w-full bg-steel-800" />
                     )}
@@ -955,15 +1133,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     key={part.id}
                     type="button"
                     onClick={() => {
-                      setSelectedPartId(part.id);
-                      setView("DETAIL");
-                      setDetailPanel("main");
+                      openPartDetail(part.id);
                     }}
                     className={`relative h-[184px] overflow-hidden border text-left ${priorityClass(part.priority)}`}
                   >
                     {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
+                      <img src={mediaUrlFromStorageKey(part.photos[0].storageKey)} alt={part.name} className="h-full w-full object-cover" />
                     ) : (
                       <div className="h-full w-full bg-steel-800" />
                     )}
@@ -1075,15 +1251,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     event.dataTransfer.effectAllowed = "move";
                   }}
                   onClick={() => {
-                    setSelectedPartId(part.id);
-                    setView("DETAIL");
+                    openPartDetail(part.id);
                   }}
                   className={`relative overflow-hidden border text-left ${priorityClass(part.priority)}`}
                 >
                   {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
                     <div className="h-28 bg-steel-800">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/uploads/${part.photos[0].storageKey}`} alt={part.name} className="h-full w-full object-cover" />
+                      <img src={mediaUrlFromStorageKey(part.photos[0].storageKey)} alt={part.name} className="h-full w-full object-cover" />
                     </div>
                   ) : (
                     <div className="h-14 bg-steel-800/70" />
@@ -1103,8 +1278,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             {!stageItems.length ? <p className="mt-3 text-sm text-steel-300">No parts in this stage right now.</p> : null}
           </div>
         ) : selectedPart ? (
-          <div ref={detailScrollRef} className="relative h-full overflow-y-auto bg-[#242830]">
-            {showCompactDetailHeader ? (
+          <div
+            ref={detailScrollRef}
+            className="relative h-full overflow-y-auto bg-[#242830] pb-16 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            onTouchStart={onDetailTouchStart}
+            onTouchMove={onDetailTouchMove}
+            onTouchEnd={onDetailTouchEnd}
+          >
+            {showCompactDetailHeader && !mobileActive ? (
               <div className="sticky top-0 z-30 border-y border-[#31465f] bg-[linear-gradient(90deg,rgba(27,40,56,0.94),rgba(38,49,64,0.94),rgba(27,40,56,0.94))] px-5 py-2 backdrop-blur-sm">
               <div className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] items-center gap-3 overflow-hidden max-lg:grid-cols-1">
                 <div className="relative inline-flex h-11 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-[#1a9fff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
@@ -1119,6 +1300,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         canonicalStatusForStage(event.target.value as WorkflowStage)
                       )
                     }
+                    disabled={!canEditSelectedPart || moveMutation.isPending}
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
                   >
                     {STAGE_ORDER.map((stage) => (
@@ -1136,7 +1318,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-[#9fb0c2]">V</div>
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/uploads/${photoForPart(selectedPart)}`} alt={selectedPart.name} className="h-full w-full object-cover" />
+                        <img src={mediaUrlFromStorageKey(photoForPart(selectedPart))} alt={selectedPart.name} className="h-full w-full object-cover" />
                       )
                     ) : null}
                   </div>
@@ -1160,7 +1342,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                 <>
                   {isVideoStorageKey(photoForPart(selectedPart)) ? (
                     <video
-                      src={`/uploads/${photoForPart(selectedPart)}`}
+                      src={mediaUrlFromStorageKey(photoForPart(selectedPart))}
                       className="absolute inset-0 h-full w-full object-cover opacity-85"
                       autoPlay
                       muted
@@ -1171,13 +1353,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={`/uploads/${photoForPart(selectedPart)}`}
+                        src={mediaUrlFromStorageKey(photoForPart(selectedPart))}
                         alt={selectedPart.name}
                         className="absolute inset-0 h-full w-full scale-105 object-cover blur-2xl opacity-35"
                       />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={`/uploads/${photoForPart(selectedPart)}`}
+                        src={mediaUrlFromStorageKey(photoForPart(selectedPart))}
                         alt={selectedPart.name}
                         className="absolute inset-0 h-full w-full object-cover opacity-95"
                       />
@@ -1198,7 +1380,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               ref={installBarRef}
               className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] border-b border-[#31465f] bg-[linear-gradient(90deg,rgba(24,34,48,0.96),rgba(43,54,71,0.92),rgba(24,34,48,0.96))] backdrop-blur-sm max-lg:grid-cols-1"
             >
-              <div className="m-3">
+              <div className="m-3 flex items-center gap-2">
                 <div className="relative inline-flex h-12 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-[#1a9fff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
                   <span className="pointer-events-none absolute left-3 text-xl font-semibold tracking-wide">
                     {stageLabel(statusToStage(selectedPart.status))}
@@ -1211,6 +1393,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         canonicalStatusForStage(event.target.value as WorkflowStage)
                       )
                     }
+                    disabled={!canEditSelectedPart || moveMutation.isPending}
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
                   >
                     {STAGE_ORDER.map((stage) => (
@@ -1221,15 +1404,50 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 text-white" />
                 </div>
+                <button
+                  onClick={() => setDetailPanel((prev) => (prev === "settings" ? "main" : "settings"))}
+                  className={`inline-flex h-12 items-center justify-center gap-2 rounded-[4px] border px-3 lg:hidden ${
+                    detailPanel === "settings"
+                      ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#c7e7ff]"
+                      : "border-[#435266] bg-[#3a4659] text-[#c7d5e0] hover:bg-[#4a5970]"
+                  }`}
+                >
+                  <Settings className="h-5 w-5" />
+                  <span className="text-xs font-semibold">Settings</span>
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-2 px-2 py-2 text-center lg:grid-cols-4">
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
                   <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Machinist</p>
                   <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedPrimaryOwnerName}</p>
+                  {canClaimMachinist ? (
+                    <div className="mt-2 px-2">
+                      <button
+                        type="button"
+                        onClick={() => claimMachinistMutation.mutate()}
+                        disabled={claimMachinistMutation.isPending}
+                        className="w-full rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-2 py-1 text-xs text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {claimMachinistMutation.isPending ? "Claiming..." : "Claim Machinist"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
                   <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Finisher</p>
                   <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedFinisherName}</p>
+                  {canClaimFinisher ? (
+                    <div className="mt-2 px-2">
+                      <button
+                        type="button"
+                        onClick={() => claimFinisherMutation.mutate()}
+                        disabled={claimFinisherMutation.isPending}
+                        className="w-full rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-2 py-1 text-xs text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {claimFinisherMutation.isPending ? "Claiming..." : "Claim Finisher"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
                   <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Copies</p>
@@ -1240,7 +1458,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <p className="text-base text-[#d6e4f2]">Not set</p>
                 </div>
               </div>
-              <div className="mr-4 flex items-center gap-2">
+              <div className="mr-4 hidden items-center gap-2 lg:flex">
                 <button
                   onClick={() => setDetailPanel((prev) => (prev === "settings" ? "main" : "settings"))}
                   className={`inline-flex h-9 w-[124px] items-center justify-center gap-2 rounded-[4px] border px-2 ${
@@ -1254,6 +1472,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                 </button>
               </div>
             </div>
+            {!canEditSelectedPart ? <p className="px-4 py-2 text-xs text-[#9fb0c2]">{readOnlyReason}</p> : null}
 
             {detailPanel === "main" ? (
               <div className="space-y-5 bg-[radial-gradient(circle_at_20%_20%,rgba(97,132,170,0.15),transparent_50%)] p-4">
@@ -1286,6 +1505,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                           onClick={() =>
                             quickQtyMutation.mutate(Math.max(0, selectedPart.quantityComplete - 1))
                           }
+                          disabled={!canEditSelectedPart || quickQtyMutation.isPending}
                           className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-2 py-1 text-[#c7d5e0] hover:bg-[#243244]"
                         >
                           -1
@@ -1297,6 +1517,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                               Math.min(selectedPart.quantityRequired, selectedPart.quantityComplete + 1)
                             )
                           }
+                          disabled={!canEditSelectedPart || quickQtyMutation.isPending}
                           className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-2 py-1 text-[#c7d5e0] hover:bg-[#243244]"
                         >
                           +1
@@ -1324,7 +1545,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <button
                     type="button"
                     onClick={() => uploadInputRef.current?.click()}
-                    disabled={uploadPhotoMutation.isPending}
+                    disabled={!canEditSelectedPart || uploadPhotoMutation.isPending}
                     className="mt-3 rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-3 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {uploadPhotoMutation.isPending ? "Uploading..." : "Upload Photo/Video"}
@@ -1335,7 +1556,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         {isVideoPhoto(photo) ? (
                           <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
                             <video
-                              src={`/uploads/${photo.storageKey}`}
+                              src={mediaUrlFromStorageKey(photo.storageKey)}
                               className="h-24 w-full rounded-[2px] object-cover"
                               muted
                             />
@@ -1344,7 +1565,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                           <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={`/uploads/${photo.storageKey}`}
+                              src={mediaUrlFromStorageKey(photo.storageKey)}
                               alt="Part media"
                               className="h-24 w-full rounded-[2px] object-cover"
                             />
@@ -1408,12 +1629,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <input
                       value={editName}
                       onChange={(event) => setEditName(event.target.value)}
+                      disabled={!canEditSelectedPart}
                       className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                     />
                     <label className="mt-3 block text-xs text-[#9aa8b8]">Part Number</label>
                     <input
                       value={editPartNumber}
                       onChange={(event) => setEditPartNumber(event.target.value)}
+                      disabled={!canEditSelectedPart}
                       className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                     />
                     <label className="mt-3 block text-xs text-[#9aa8b8]">Priority</label>
@@ -1422,6 +1645,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       onChange={(event) =>
                         setEditPriority(event.target.value === "ASAP" ? 1 : event.target.value === "NORMAL" ? 3 : 5)
                       }
+                      disabled={!canEditSelectedPart}
                       className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                     >
                       <option value="ASAP">ASAP</option>
@@ -1440,6 +1664,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <input
                       value={editQtyRequired}
                       onChange={(event) => setEditQtyRequired(event.target.value.replace(/\D/g, ""))}
+                      disabled={!canEditSelectedPart}
                       className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                       inputMode="numeric"
                     />
@@ -1447,6 +1672,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <input
                       value={editQtyComplete}
                       onChange={(event) => setEditQtyComplete(event.target.value.replace(/\D/g, ""))}
+                      disabled={!canEditSelectedPart}
                       className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
                       inputMode="numeric"
                     />
@@ -1467,7 +1693,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                             {isVideoPhoto(photo) ? (
                               <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
                                 <video
-                                  src={`/uploads/${photo.storageKey}`}
+                                  src={mediaUrlFromStorageKey(photo.storageKey)}
                                   className="h-20 w-full rounded-[2px] object-cover"
                                   muted
                                 />
@@ -1476,7 +1702,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                               <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                  src={`/uploads/${photo.storageKey}`}
+                                  src={mediaUrlFromStorageKey(photo.storageKey)}
                                   alt="Part photo"
                                   className="h-20 w-full rounded-[2px] object-cover"
                                 />
@@ -1485,6 +1711,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                             <button
                               type="button"
                               onClick={() => setThumbnail(selectedPart.id, photo.storageKey)}
+                              disabled={!canEditSelectedPart}
                               className={`mt-1 w-full rounded-[2px] border px-2 py-1 text-xs ${
                                 active
                                   ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#d7efff]"
@@ -1506,7 +1733,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <button
                     type="button"
                     onClick={() => settingsMutation.mutate()}
-                    disabled={settingsMutation.isPending}
+                    disabled={!canEditSelectedPart || settingsMutation.isPending}
                     className="inline-flex rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-4 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {settingsMutation.isPending ? "Saving..." : "Save Settings"}
@@ -1536,7 +1763,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </button>
               {isVideoPreview(previewMedia) ? (
                 <video
-                  src={`/uploads/${previewMedia.storageKey}`}
+                  src={mediaUrlFromStorageKey(previewMedia.storageKey)}
                   controls
                   autoPlay
                   className="max-h-[92vh] w-full bg-black object-contain"
@@ -1544,7 +1771,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={`/uploads/${previewMedia.storageKey}`}
+                  src={mediaUrlFromStorageKey(previewMedia.storageKey)}
                   alt="Part media preview"
                   className="max-h-[92vh] w-full bg-black object-contain"
                 />
@@ -1556,4 +1783,5 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     </section>
   );
 }
+
 

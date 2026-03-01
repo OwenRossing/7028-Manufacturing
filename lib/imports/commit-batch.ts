@@ -14,6 +14,7 @@ type TransactionClient = {
     findUnique: (args: unknown) => Promise<{
       id: string;
       quantityRequired: number;
+      description: string | null;
     } | null>;
     create: (args: unknown) => Promise<{ id: string }>;
     update: (args: unknown) => Promise<unknown>;
@@ -45,6 +46,21 @@ function extractOnshapeIdentity(raw: unknown): OnshapeIdentity | null {
   const partId = asString(source.onshapePartId);
   if (!documentId || !workspaceId || !elementId || !partId) return null;
   return { documentId, workspaceId, elementId, partId };
+}
+
+function extractOnshapeImportNotes(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const source = raw as Record<string, unknown>;
+  const notes = asString(source.onshapeImportNotes);
+  return notes ?? null;
+}
+
+function mergeDescription(existing: string | null, importedNotes: string | null): string | null {
+  if (!importedNotes) return existing;
+  const current = asString(existing ?? "");
+  if (!current) return importedNotes;
+  if (current.includes(importedNotes)) return current;
+  return `${current}\n${importedNotes}`;
 }
 
 async function attachOnshapeIdentity(
@@ -99,6 +115,10 @@ export async function commitImportBatch(params: {
         batch.sourceType === IMPORT_SOURCE_TYPE.ONSHAPE_API
           ? extractOnshapeIdentity(row.rawJson)
           : null;
+      const importedNotes =
+        batch.sourceType === IMPORT_SOURCE_TYPE.ONSHAPE_API
+          ? extractOnshapeImportNotes(row.rawJson)
+          : null;
 
       if (!existing && row.action === ImportRowAction.CREATE) {
         const newPart = await trx.part.create({
@@ -107,6 +127,7 @@ export async function commitImportBatch(params: {
             partNumber: row.partNumber,
             name: row.name,
             quantityRequired: row.quantityNeeded ?? 1,
+            description: importedNotes,
             status: PartStatus.DESIGNED
           }
         });
@@ -135,7 +156,8 @@ export async function commitImportBatch(params: {
           where: { id: existing.id },
           data: {
             name: row.name,
-            quantityRequired: row.quantityNeeded ?? existing.quantityRequired
+            quantityRequired: row.quantityNeeded ?? existing.quantityRequired,
+            description: mergeDescription(existing.description, importedNotes)
           }
         });
         if (identity) {

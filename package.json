@@ -12,15 +12,17 @@
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "typecheck": "next typegen && tsc --noEmit",
     "typecheck:offline": "next typegen && tsc --noEmit",
+    "credential-test": "tsx scripts/credential-test.ts",
     "prisma:generate": "prisma generate",
     "prisma:generate:if-present": "node scripts/prisma-generate-if-present.cjs",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "db:push": "prisma db push",
-    "db:reset": "prisma migrate reset --force && npm run prisma:seed"
+    "db:reset": "prisma migrate reset --force --skip-generate && npm run prisma:seed"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.998.0",
     "@prisma/client": "^6.2.1",
     "@tanstack/react-query": "^5.66.0",
     "clsx": "^2.1.1",

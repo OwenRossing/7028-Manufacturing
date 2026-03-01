@@ -11,7 +11,7 @@ export default async function ProjectsPage() {
     redirect("/");
   }
 
-  const [projects, config] = await Promise.all([
+  const [projects, config, users] = await Promise.all([
     prisma.project.findMany({
       orderBy: { createdAt: "desc" },
       select: {
@@ -38,7 +38,11 @@ export default async function ProjectsPage() {
         }
       }
     }),
-    listWorkspaceOptions()
+    listWorkspaceOptions(),
+    prisma.user.findMany({
+      select: { id: true, displayName: true },
+      orderBy: { displayName: "asc" }
+    })
   ]);
 
   return (
@@ -47,6 +51,7 @@ export default async function ProjectsPage() {
       <p className="text-sm text-steel-300">Administrative tools for project and part management.</p>
       <ProjectAdminPanel
         config={config}
+        users={users}
         projects={projects.map((project) => ({
           id: project.id,
           name: project.name,
@@ -56,6 +61,11 @@ export default async function ProjectsPage() {
             id: part.id,
             name: part.name,
             partNumber: part.partNumber,
+            machinistId:
+              part.owners.find((owner) => owner.role === "PRIMARY")?.userId ?? null,
+            collaboratorIds: part.owners
+              .filter((owner) => owner.role === "COLLABORATOR")
+              .map((owner) => owner.userId),
             machinist:
               part.owners.find((owner) => owner.role === "PRIMARY")?.user.displayName ?? "Unassigned",
             finisher:

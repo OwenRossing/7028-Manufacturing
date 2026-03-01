@@ -54,12 +54,13 @@ async function main() {
 
   await prisma.partOwner.upsert({
     where: {
-      partId_userId: {
+      partId_userId_role: {
         partId: part.id,
-        userId: alex.id
+        userId: alex.id,
+        role: PartOwnerRole.PRIMARY
       }
     },
-    update: { role: PartOwnerRole.PRIMARY },
+    update: {},
     create: {
       partId: part.id,
       userId: alex.id,
@@ -69,12 +70,13 @@ async function main() {
 
   await prisma.partOwner.upsert({
     where: {
-      partId_userId: {
+      partId_userId_role: {
         partId: part.id,
-        userId: riley.id
+        userId: riley.id,
+        role: PartOwnerRole.COLLABORATOR
       }
     },
-    update: { role: PartOwnerRole.COLLABORATOR },
+    update: {},
     create: {
       partId: part.id,
       userId: riley.id,

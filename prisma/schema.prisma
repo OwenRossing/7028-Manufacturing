@@ -118,7 +118,7 @@ model PartOwner {
   part       Part          @relation(fields: [partId], references: [id], onDelete: Cascade)
   user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([partId, userId])
+  @@unique([partId, userId, role])
   @@index([userId, role])
 }
 

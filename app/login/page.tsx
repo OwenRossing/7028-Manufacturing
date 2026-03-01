@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { isDemoMode } from "@/lib/app-mode";
@@ -41,7 +41,7 @@ export default function LoginPage() {
   const demoMode = isDemoMode();
   const [demoUsers, setDemoUsers] = useState<Array<{ id: string; displayName: string; email: string }>>([]);
 
-  async function onGoogleCredential(credential: string) {
+  const onGoogleCredential = useCallback(async (credential: string) => {
     setLoading(true);
     setError(null);
     const response = await fetch("/api/auth/google", {
@@ -57,7 +57,7 @@ export default function LoginPage() {
     }
     router.replace("/");
     router.refresh();
-  }
+  }, [router]);
 
   useEffect(() => {
     if (!googleReady || !googleClientId || !googleButtonRef.current) return;
@@ -77,7 +77,7 @@ export default function LoginPage() {
       text: "signin_with",
       width: "340"
     });
-  }, [googleReady, googleClientId]);
+  }, [googleReady, googleClientId, onGoogleCredential]);
 
   useEffect(() => {
     if (!demoMode) return;
@@ -91,21 +91,28 @@ export default function LoginPage() {
   }, [demoMode]);
 
   async function onDemoLogin(userId: string) {
-    setLoading(true);
-    setError(null);
-    const response = await fetch("/api/auth/demo-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId })
-    });
-    if (!response.ok) {
-      const data = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error ?? "Unable to sign in as demo user.");
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch("/api/auth/demo-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ userId })
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Unable to sign in as demo user.");
+        setLoading(false);
+        return;
+      }
+
+      // Use hard navigation fallback for mobile/LAN cases where client routing can stall.
+      window.location.assign("/");
+    } catch {
+      setError("Unable to sign in as demo user.");
       setLoading(false);
-      return;
     }
-    router.replace("/");
-    router.refresh();
   }
 
   return (

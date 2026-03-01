@@ -26,15 +26,24 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const hideChrome = pathname.startsWith("/login");
+  const isWorkspacePath = pathname === "/" || pathname.startsWith("/parts") || pathname.startsWith("/import");
+  const shellClassName = isWorkspacePath
+    ? "h-[100dvh] overflow-hidden bg-[#1b2838] text-white"
+    : "min-h-screen bg-[#1b2838] text-white";
+  const mainClassName = hideChrome
+    ? "w-full"
+    : isWorkspacePath
+      ? "w-full overflow-hidden pb-12"
+      : "w-full pb-12";
 
   return (
-    <div className="min-h-screen bg-[#1b2838] text-white">
+    <div className={shellClassName}>
       {!hideChrome ? (
         <Suspense fallback={null}>
           <AppHeader projects={projects} completed={completed} total={total} />
         </Suspense>
       ) : null}
-      <main className={hideChrome ? "w-full" : "w-full pb-12"}>{children}</main>
+      <main className={mainClassName}>{children}</main>
       {!hideChrome ? (
         <Suspense fallback={null}>
           <AppBottomBar completed={completed} total={total} />
@@ -43,4 +52,3 @@ export function AppShell({
     </div>
   );
 }
-

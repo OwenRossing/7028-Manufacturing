@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { normalizeSeasonYear, sanitizeTeamNumber, TEAM_NUMBER_MAX_LENGTH } from "@/lib/part-number";
 
 type ProjectPart = {
   id: string;
   name: string;
   partNumber: string;
+  machinistId: string | null;
+  collaboratorIds: string[];
   machinist: string;
   finisher: string;
 };
@@ -22,6 +25,11 @@ type ProjectAdminItem = {
   season: string;
   partCount: number;
   parts: ProjectPart[];
+};
+
+type UserOption = {
+  id: string;
+  displayName: string;
 };
 
 type WorkspaceOptions = {
@@ -39,27 +47,32 @@ type WorkspaceOptions = {
 
 export function ProjectAdminPanel({
   projects,
-  config
+  config,
+  users
 }: {
   projects: ProjectAdminItem[];
   config: WorkspaceOptions;
+  users: UserOption[];
 }) {
+  const [workspaceConfig, setWorkspaceConfig] = useState(config);
   const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "");
   const [projectName, setProjectName] = useState("");
-  const [projectSeason, setProjectSeason] = useState(String(new Date().getFullYear()));
+  const [projectSeason, setProjectSeason] = useState(String(new Date().getFullYear()).slice(-2));
   const [createMessage, setCreateMessage] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rowFeedback, setRowFeedback] = useState<
     Record<string, { kind: "success" | "error"; text: string }>
   >({});
-  const [partEdits, setPartEdits] = useState<Record<string, { name: string }>>({});
+  const [partEdits, setPartEdits] = useState<
+    Record<string, { name: string; machinistId: string; finisherId: string; collaboratorIds: string[] }>
+  >({});
   const [teamNumber, setTeamNumber] = useState("");
   const [robotTeam, setRobotTeam] = useState(config.teamNumbers[0] ?? "");
-  const [robotYear, setRobotYear] = useState(config.seasonYears[0] ?? String(new Date().getFullYear()));
+  const [robotYear, setRobotYear] = useState(config.seasonYears[0] ?? String(new Date().getFullYear()).slice(-2));
   const [robotNumber, setRobotNumber] = useState("");
   const [subsystemTeam, setSubsystemTeam] = useState(config.teamNumbers[0] ?? "");
-  const [subsystemYear, setSubsystemYear] = useState(config.seasonYears[0] ?? String(new Date().getFullYear()));
+  const [subsystemYear, setSubsystemYear] = useState(config.seasonYears[0] ?? String(new Date().getFullYear()).slice(-2));
   const [subsystemRobot, setSubsystemRobot] = useState("");
   const [subsystemNumber, setSubsystemNumber] = useState("");
   const [subsystemLabel, setSubsystemLabel] = useState("");
@@ -68,6 +81,13 @@ export function ProjectAdminPanel({
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
+  );
+  const robotChoices = useMemo(
+    () =>
+      workspaceConfig.robotNumbers
+        .filter((item) => item.teamNumber === subsystemTeam && item.seasonYear === subsystemYear)
+        .map((item) => item.robotNumber),
+    [workspaceConfig.robotNumbers, subsystemTeam, subsystemYear]
   );
 
   async function createProject() {
@@ -78,7 +98,7 @@ export function ProjectAdminPanel({
     const response = await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: projectName.trim(), season: projectSeason })
+      body: JSON.stringify({ name: projectName.trim(), season: normalizeSeasonYear(projectSeason) })
     });
     const data = (await response.json().catch(() => null)) as { error?: string } | null;
     if (!response.ok) {
@@ -86,13 +106,18 @@ export function ProjectAdminPanel({
       setBusy(false);
       return;
     }
-    setCreateMessage("Project created. Refresh to load it into project selector.");
+    setCreateMessage("Project created.");
     setProjectName("");
     setBusy(false);
   }
 
   function editForPart(part: ProjectPart) {
-    return partEdits[part.id] ?? { name: part.name };
+    return partEdits[part.id] ?? {
+      name: part.name,
+      machinistId: part.machinistId ?? "",
+      finisherId: part.collaboratorIds[0] ?? "",
+      collaboratorIds: [...part.collaboratorIds]
+    };
   }
 
   async function savePart(part: ProjectPart) {
@@ -119,9 +144,30 @@ export function ProjectAdminPanel({
       setBusy(false);
       return;
     }
+
+    const primaryOwnerId = edit.machinistId || null;
+    const collaboratorIds = edit.collaboratorIds.filter((id, index, array) => array.indexOf(id) === index);
+    const ownersResponse = await fetch(`/api/parts/${part.id}/owners`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        primaryOwnerId,
+        collaboratorIds
+      })
+    });
+    const ownersData = (await ownersResponse.json().catch(() => null)) as { error?: string } | null;
+    if (!ownersResponse.ok) {
+      setRowFeedback((prev) => ({
+        ...prev,
+        [part.id]: { kind: "error", text: ownersData?.error ?? "Failed to save owners." }
+      }));
+      setBusy(false);
+      return;
+    }
+
     setRowFeedback((prev) => ({
       ...prev,
-      [part.id]: { kind: "success", text: "Saved. Refresh list to confirm." }
+      [part.id]: { kind: "success", text: "Saved." }
     }));
     setBusy(false);
   }
@@ -158,13 +204,22 @@ export function ProjectAdminPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+    const data = (await response.json().catch(() => null)) as (WorkspaceOptions & { error?: string }) | null;
     if (!response.ok) {
       setConfigMessage(data?.error ?? "Unable to save config.");
       setBusy(false);
       return;
     }
-    setConfigMessage("Saved. Refresh page to load updated dropdown options.");
+    if (data) {
+      setWorkspaceConfig(data);
+      const nextTeam = data.teamNumbers[0] ?? "";
+      const nextYear = data.seasonYears[0] ?? String(new Date().getFullYear()).slice(-2);
+      setRobotTeam((prev) => prev || nextTeam);
+      setSubsystemTeam((prev) => prev || nextTeam);
+      setRobotYear((prev) => prev || nextYear);
+      setSubsystemYear((prev) => prev || nextYear);
+    }
+    setConfigMessage("Saved.");
     setBusy(false);
   }
 
@@ -180,11 +235,11 @@ export function ProjectAdminPanel({
           />
           <Input
             value={projectSeason}
-            onChange={(event) => setProjectSeason(event.target.value.replace(/\D/g, "").slice(0, 4))}
-            placeholder="2026"
+            onChange={(event) => setProjectSeason(normalizeSeasonYear(event.target.value))}
+            placeholder="26"
             inputMode="numeric"
           />
-          <Button onClick={createProject} disabled={busy || !projectName.trim() || projectSeason.length !== 4}>
+          <Button onClick={createProject} disabled={busy || !projectName.trim() || projectSeason.length !== 2}>
             Create
           </Button>
         </div>
@@ -214,17 +269,33 @@ export function ProjectAdminPanel({
             <p className="text-sm font-semibold text-white">Team Number</p>
             <Input
               value={teamNumber}
-              onChange={(event) => setTeamNumber(event.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(event) => setTeamNumber(sanitizeTeamNumber(event.target.value))}
+              maxLength={TEAM_NUMBER_MAX_LENGTH}
               placeholder="7028"
             />
             <Button disabled={busy || !teamNumber} onClick={() => addConfig({ kind: "TEAM", teamNumber })}>
               Add Team
             </Button>
+            <p className="text-xs text-steel-300">
+              Existing: {workspaceConfig.teamNumbers.length ? workspaceConfig.teamNumbers.join(", ") : "none"}
+            </p>
           </div>
           <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
             <p className="text-sm font-semibold text-white">Robot Number</p>
-            <Input value={robotTeam} onChange={(event) => setRobotTeam(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Team" />
-            <Input value={robotYear} onChange={(event) => setRobotYear(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Year" />
+            <Select value={robotTeam} onChange={(event) => setRobotTeam(event.target.value)}>
+              {workspaceConfig.teamNumbers.map((team) => (
+                <option key={team} value={team}>
+                  {team}
+                </option>
+              ))}
+            </Select>
+            <Select value={robotYear} onChange={(event) => setRobotYear(event.target.value)}>
+              {workspaceConfig.seasonYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </Select>
             <Input value={robotNumber} onChange={(event) => setRobotNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="Robot" />
             <Button
               disabled={busy || !robotTeam || !robotYear || !robotNumber}
@@ -232,13 +303,44 @@ export function ProjectAdminPanel({
             >
               Add Robot
             </Button>
+            <p className="text-xs text-steel-300">
+              Existing: {workspaceConfig.robotNumbers.length
+                ? workspaceConfig.robotNumbers.map((item) => `${item.teamNumber}-${item.seasonYear}-${item.robotNumber}`).join(", ")
+                : "none"}
+            </p>
           </div>
           <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
             <p className="text-sm font-semibold text-white">Subsystem</p>
-            <Input value={subsystemTeam} onChange={(event) => setSubsystemTeam(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Team" />
-            <Input value={subsystemYear} onChange={(event) => setSubsystemYear(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Year" />
-            <Input value={subsystemRobot} onChange={(event) => setSubsystemRobot(event.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="Robot" />
-            <Input value={subsystemNumber} onChange={(event) => setSubsystemNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="Subsystem" />
+            <Select value={subsystemTeam} onChange={(event) => setSubsystemTeam(event.target.value)}>
+              {workspaceConfig.teamNumbers.map((team) => (
+                <option key={team} value={team}>
+                  {team}
+                </option>
+              ))}
+            </Select>
+            <Select value={subsystemYear} onChange={(event) => setSubsystemYear(event.target.value)}>
+              {workspaceConfig.seasonYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </Select>
+            <Select value={subsystemRobot} onChange={(event) => setSubsystemRobot(event.target.value)}>
+              <option value="">Select robot</option>
+              {robotChoices.map((robot) => (
+                <option key={robot} value={robot}>
+                  {robot}
+                </option>
+              ))}
+            </Select>
+            <Select value={subsystemNumber} onChange={(event) => setSubsystemNumber(event.target.value)}>
+              <option value="">Select subsystem</option>
+              {Array.from({ length: 10 }, (_, index) => String(index)).map((value) => (
+                <option key={value} value={value}>
+                  {value}000
+                </option>
+              ))}
+            </Select>
             <Input value={subsystemLabel} onChange={(event) => setSubsystemLabel(event.target.value)} placeholder="Label (optional)" />
             <Button
               disabled={busy || !subsystemTeam || !subsystemYear || !subsystemRobot || !subsystemNumber}
@@ -255,6 +357,13 @@ export function ProjectAdminPanel({
             >
               Add Subsystem
             </Button>
+            <p className="text-xs text-steel-300">
+              Existing: {workspaceConfig.subsystems.length
+                ? workspaceConfig.subsystems
+                    .map((item) => `${item.teamNumber}-${item.seasonYear}-${item.robotNumber}-${item.subsystemNumber}000${item.label ? ` (${item.label})` : ""}`)
+                    .join(", ")
+                : "none"}
+            </p>
           </div>
         </div>
         {configMessage ? <p className="text-sm text-steel-200">{configMessage}</p> : null}
@@ -274,15 +383,15 @@ export function ProjectAdminPanel({
           </div>
         </div>
         <p className="text-sm text-steel-300">
-          Quick edit part names. Machinist and finisher are managed in each part settings page.
+          Quick edit part names and ownership directly in the list.
         </p>
         <div className="hidden text-xs text-steel-300 md:grid md:grid-cols-[1.6fr_1fr_1fr_auto_auto_1.6fr]">
           <span>Name</span>
           <span>Machinist</span>
           <span>Finisher</span>
-          <span>Save</span>
-          <span>Delete</span>
-          <span>Feedback</span>
+          <span>Save Changes</span>
+          <span>Delete Part</span>
+          <span>Result</span>
         </div>
         <div className="space-y-2">
           {selectedProject?.parts.length ? (
@@ -300,8 +409,56 @@ export function ProjectAdminPanel({
                       }))
                     }
                   />
-                  <Input value={part.machinist} readOnly />
-                  <Input value={part.finisher} readOnly />
+                  <Select
+                    value={edit.machinistId}
+                    onChange={(event) => {
+                      const nextMachinistId = event.target.value;
+                      setPartEdits((prev) => {
+                        const next = {
+                          ...edit,
+                          machinistId: nextMachinistId
+                        };
+                        if (next.finisherId && next.finisherId === nextMachinistId) {
+                          next.collaboratorIds = [nextMachinistId, ...next.collaboratorIds];
+                        }
+                        return {
+                          ...prev,
+                          [part.id]: next
+                        };
+                      });
+                    }}
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.displayName}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    value={edit.finisherId}
+                    onChange={(event) => {
+                      const nextFinisherId = event.target.value;
+                      setPartEdits((prev) => ({
+                        ...prev,
+                        [part.id]: {
+                          ...edit,
+                          finisherId: nextFinisherId,
+                          collaboratorIds: nextFinisherId
+                            ? [nextFinisherId, ...edit.collaboratorIds.filter((id) => id !== nextFinisherId)]
+                            : []
+                        }
+                      }));
+                    }}
+                  >
+                    <option value="">Unassigned</option>
+                    {users
+                      .map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.displayName}
+                        </option>
+                      ))}
+                  </Select>
                   <Button variant="secondary" onClick={() => savePart(part)} disabled={busy}>
                     Save
                   </Button>

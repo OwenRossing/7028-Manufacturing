@@ -16,6 +16,8 @@ import {
   type WorkflowStage
 } from "@/lib/status";
 import { PartListItem } from "@/types/parts";
+import { queryKeys } from "@/lib/query-keys";
+import { mediaUrlFromStorageKey } from "@/lib/media-url";
 
 type OwnerOption = {
   id: string;
@@ -64,18 +66,18 @@ export function PartDetailClient({
   part,
   photos,
   users,
-  isOwner,
+  currentUserId,
   isAdmin,
-  machinedBy,
-  finishedBy
+  lastMachinedBy,
+  lastFinishedBy
 }: {
   part: PartData;
   photos: PartPhoto[];
   users: OwnerOption[];
-  isOwner: boolean;
+  currentUserId: string | null;
   isAdmin: boolean;
-  machinedBy: string;
-  finishedBy: string;
+  lastMachinedBy: string;
+  lastFinishedBy: string;
 }) {
   const queryClient = useQueryClient();
 
@@ -95,11 +97,20 @@ export function PartDetailClient({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const collaboratorOptions = useMemo(
-    () => users.filter((user) => user.id !== primaryOwnerId),
-    [users, primaryOwnerId]
+  const collaboratorOptions = useMemo(() => users, [users]);
+  const userNameById = useMemo(
+    () => new Map(users.map((user) => [user.id, user.displayName])),
+    [users]
   );
-  const isPrivilegedEditor = isOwner || isAdmin;
+  const assignedMachinist = primaryOwnerId ? (userNameById.get(primaryOwnerId) ?? "Unknown user") : "Unassigned";
+  const assignedFinishers = collaboratorIds.map((id) => userNameById.get(id) ?? "Unknown user");
+  const assignedFinisherLabel = assignedFinishers.length ? assignedFinishers.join(", ") : "Unassigned";
+  const isAssignedEditor = Boolean(
+    currentUserId && (primaryOwnerId === currentUserId || collaboratorIds.includes(currentUserId))
+  );
+  const isPrivilegedEditor = isAssignedEditor || isAdmin;
+  const canClaimMachinist = Boolean(currentUserId) && !primaryOwnerId;
+  const canClaimFinisher = Boolean(currentUserId) && collaboratorIds.length === 0;
   const hasPhotos = partPhotos.length > 0;
 
   const detailsMutation = useMutation({
@@ -124,7 +135,7 @@ export function PartDetailClient({
     },
     onSuccess: () => {
       setMessage("Identity updated.");
-      void queryClient.invalidateQueries({ queryKey: ["parts"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
     onError: (mutationError: Error) => setError(mutationError.message)
   });
@@ -153,7 +164,8 @@ export function PartDetailClient({
     },
     onSuccess: () => {
       setMessage("Stage updated.");
-      void queryClient.invalidateQueries({ queryKey: ["parts"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
     },
     onError: (mutationError: Error, _variables, context) => {
       setError(mutationError.message);
@@ -180,7 +192,8 @@ export function PartDetailClient({
     onSuccess: (nextComplete) => {
       setQuantityComplete(nextComplete);
       setMessage("Quantity updated.");
-      void queryClient.invalidateQueries({ queryKey: ["parts"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
     },
     onError: (mutationError: Error) => setError(mutationError.message)
   });
@@ -205,7 +218,55 @@ export function PartDetailClient({
     },
     onSuccess: () => {
       setMessage("Machinist/finisher updated.");
-      void queryClient.invalidateQueries({ queryKey: ["parts"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+    },
+    onError: (mutationError: Error) => setError(mutationError.message)
+  });
+
+  const claimMachinistMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/parts/${part.id}/claim-machinist`, {
+        method: "POST"
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to claim machinist.");
+      return data;
+    },
+    onMutate: () => {
+      setMessage(null);
+      setError(null);
+    },
+    onSuccess: () => {
+      if (currentUserId) {
+        setPrimaryOwnerId(currentUserId);
+      }
+      setMessage("Machinist claimed.");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
+    },
+    onError: (mutationError: Error) => setError(mutationError.message)
+  });
+
+  const claimFinisherMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/parts/${part.id}/claim-finisher`, {
+        method: "POST"
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(data?.error ?? "Unable to claim finisher.");
+      return data;
+    },
+    onMutate: () => {
+      setMessage(null);
+      setError(null);
+    },
+    onSuccess: () => {
+      if (currentUserId) {
+        setCollaboratorIds([currentUserId]);
+      }
+      setMessage("Finisher claimed.");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.metrics.all });
     },
     onError: (mutationError: Error) => setError(mutationError.message)
   });
@@ -229,7 +290,7 @@ export function PartDetailClient({
       }
       if (fileInputRef.current) fileInputRef.current.value = "";
       setMessage("Photo uploaded.");
-      void queryClient.invalidateQueries({ queryKey: ["parts"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
     onError: (mutationError: Error) => setError(mutationError.message)
   });
@@ -276,17 +337,47 @@ export function PartDetailClient({
           </div>
           <div className="space-y-2 rounded-sm border border-steel-700 bg-steel-900 p-3">
             <div className="rounded-sm border border-steel-700 bg-steel-850 p-3 text-sm">
-              <p className="text-steel-300">Machined by</p>
-              <p className="font-semibold text-white">{machinedBy}</p>
+              <p className="text-steel-300">Machinist (assigned)</p>
+              <p className="font-semibold text-white">{assignedMachinist}</p>
+              <p className="text-xs text-steel-300">Last moved to Machined: {lastMachinedBy}</p>
+              {canClaimMachinist ? (
+                <Button
+                  variant="secondary"
+                  className="mt-2 h-8 px-2 text-xs"
+                  onClick={() => claimMachinistMutation.mutate()}
+                  disabled={claimMachinistMutation.isPending}
+                >
+                  {claimMachinistMutation.isPending ? "Claiming..." : "Claim Machinist"}
+                </Button>
+              ) : !currentUserId && !primaryOwnerId ? (
+                <p className="mt-2 text-xs text-steel-300">Sign in to claim machinist.</p>
+              ) : null}
             </div>
             <div className="rounded-sm border border-steel-700 bg-steel-850 p-3 text-sm">
-              <p className="text-steel-300">Finished by</p>
-              <p className="font-semibold text-white">{finishedBy}</p>
+              <p className="text-steel-300">Finisher (assigned)</p>
+              <p className="font-semibold text-white">{assignedFinisherLabel}</p>
+              <p className="text-xs text-steel-300">Last moved to Completed: {lastFinishedBy}</p>
+              {canClaimFinisher ? (
+                <Button
+                  variant="secondary"
+                  className="mt-2 h-8 px-2 text-xs"
+                  onClick={() => claimFinisherMutation.mutate()}
+                  disabled={claimFinisherMutation.isPending}
+                >
+                  {claimFinisherMutation.isPending ? "Claiming..." : "Claim Finisher"}
+                </Button>
+              ) : !currentUserId && collaboratorIds.length === 0 ? (
+                <p className="mt-2 text-xs text-steel-300">Sign in to claim finisher.</p>
+              ) : null}
             </div>
           </div>
         </div>
 
-        {!isPrivilegedEditor ? <p className="text-xs text-steel-300">You are not assigned to this part. Changes are logged.</p> : null}
+        {!isPrivilegedEditor ? (
+          <p className="text-xs text-steel-300">
+            Read-only: you are not assigned to this part. Claim an open role above or ask an assigned user/admin.
+          </p>
+        ) : null}
         {!hasPhotos ? (
           <p className="rounded-sm border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-200">
             Upload a photo before moving to Completed.
@@ -323,7 +414,11 @@ export function PartDetailClient({
                 photoMutation.mutate(formData);
               }}
             />
-            <Button onClick={() => fileInputRef.current?.click()} disabled={photoMutation.isPending} variant="secondary">
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!isPrivilegedEditor || photoMutation.isPending}
+              variant="secondary"
+            >
               {photoMutation.isPending ? "Uploading..." : "Add Photo"}
             </Button>
             <div className="flex flex-wrap gap-3">
@@ -331,7 +426,7 @@ export function PartDetailClient({
                 <div key={photo.id} className="space-y-1">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`/uploads/${photo.storageKey}`}
+                    src={mediaUrlFromStorageKey(photo.storageKey)}
                     alt={photo.originalName}
                     width={140}
                     height={140}
@@ -340,7 +435,7 @@ export function PartDetailClient({
                   <Button
                     variant="ghost"
                     onClick={() => deletePhotoMutation.mutate(photo.id)}
-                    disabled={deletePhotoMutation.isPending}
+                    disabled={!isPrivilegedEditor || deletePhotoMutation.isPending}
                     className="h-8 w-full"
                   >
                     <Trash2 className="mr-1 h-4 w-4 text-red-300" />
@@ -367,31 +462,44 @@ export function PartDetailClient({
         </button>
         {settingsOpen ? (
           <Card className="rounded-t-none border-t-0 space-y-4">
+            {!isPrivilegedEditor ? (
+              <p className="rounded-sm border border-steel-700 bg-steel-850 px-3 py-2 text-xs text-steel-300">
+                Settings are visible but read-only until you are assigned or an admin.
+              </p>
+            ) : null}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-steel-300">Identity</h3>
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm text-steel-300">Name</label>
-                  <Input value={name} onChange={(event) => setName(event.target.value)} />
+                  <Input value={name} onChange={(event) => setName(event.target.value)} disabled={!isPrivilegedEditor} />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm text-steel-300">Part #</label>
-                  <Input value={partNumber} onChange={(event) => setPartNumber(event.target.value.toUpperCase())} />
+                  <Input
+                    value={partNumber}
+                    onChange={(event) => setPartNumber(event.target.value.toUpperCase())}
+                    disabled={!isPrivilegedEditor}
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <label className="mb-1 block text-sm text-steel-300">Material</label>
-                  <Input value={material} onChange={(event) => setMaterial(event.target.value)} />
+                  <Input value={material} onChange={(event) => setMaterial(event.target.value)} disabled={!isPrivilegedEditor} />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm text-steel-300">Priority</label>
-                  <Select value={priorityTier(priority)} onChange={(event) => setPriority(tierToPriority(event.target.value))}>
+                  <Select
+                    value={priorityTier(priority)}
+                    onChange={(event) => setPriority(tierToPriority(event.target.value))}
+                    disabled={!isPrivilegedEditor}
+                  >
                     <option value="BACKBURNER">Backburner</option>
                     <option value="NORMAL">Normal</option>
                     <option value="ASAP">ASAP</option>
                   </Select>
                 </div>
               </div>
-              <Button onClick={() => detailsMutation.mutate()} disabled={detailsMutation.isPending}>
+              <Button onClick={() => detailsMutation.mutate()} disabled={!isPrivilegedEditor || detailsMutation.isPending}>
                 {detailsMutation.isPending ? "Saving..." : "Save Identity"}
               </Button>
             </div>
@@ -401,7 +509,11 @@ export function PartDetailClient({
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm text-steel-300">Stage</label>
-                  <Select value={selectedStage} onChange={(event) => setSelectedStage(event.target.value as WorkflowStage)}>
+                  <Select
+                    value={selectedStage}
+                    onChange={(event) => setSelectedStage(event.target.value as WorkflowStage)}
+                    disabled={!isPrivilegedEditor}
+                  >
                     {STAGE_ORDER.map((stage) => (
                       <option key={stage} value={stage}>
                         {stageLabel(stage)}
@@ -414,6 +526,7 @@ export function PartDetailClient({
                   <Select
                     value={String(quantityComplete)}
                     onChange={(event) => setQuantityComplete(Number.parseInt(event.target.value, 10) || 0)}
+                    disabled={!isPrivilegedEditor}
                   >
                     {quantityOptions.map((value) => (
                       <option key={value} value={value}>
@@ -427,14 +540,14 @@ export function PartDetailClient({
                 <Button
                   variant="secondary"
                   onClick={() => statusMutation.mutate(canonicalStatusForStage(selectedStage))}
-                  disabled={statusMutation.isPending}
+                  disabled={!isPrivilegedEditor || statusMutation.isPending}
                 >
                   {statusMutation.isPending ? "Saving..." : "Update Stage"}
                 </Button>
                 <Button
                   variant="secondary"
                   onClick={() => progressMutation.mutate(quantityComplete)}
-                  disabled={progressMutation.isPending}
+                  disabled={!isPrivilegedEditor || progressMutation.isPending}
                 >
                   {progressMutation.isPending ? "Saving..." : "Update Quantity"}
                 </Button>
@@ -444,7 +557,11 @@ export function PartDetailClient({
             <div className="space-y-2 border-t border-steel-700 pt-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-steel-300">Roles</h3>
               <label className="text-sm text-steel-300">Machinist</label>
-              <Select value={primaryOwnerId} onChange={(event) => setPrimaryOwnerId(event.target.value)}>
+              <Select
+                value={primaryOwnerId}
+                onChange={(event) => setPrimaryOwnerId(event.target.value)}
+                disabled={!isPrivilegedEditor}
+              >
                 <option value="">Unassigned</option>
                 {users.map((user) => (
                   <option key={user.id} value={user.id}>
@@ -466,6 +583,7 @@ export function PartDetailClient({
                         <input
                           type="checkbox"
                           checked={checked}
+                          disabled={!isPrivilegedEditor}
                           onChange={() =>
                             setCollaboratorIds((prev) =>
                               checked ? prev.filter((id) => id !== user.id) : [...prev, user.id]
@@ -477,7 +595,7 @@ export function PartDetailClient({
                   })}
                 </div>
               </div>
-              <Button onClick={() => ownersMutation.mutate()} disabled={ownersMutation.isPending}>
+              <Button onClick={() => ownersMutation.mutate()} disabled={!isPrivilegedEditor || ownersMutation.isPending}>
                 {ownersMutation.isPending ? "Saving..." : "Save Roles"}
               </Button>
             </div>
@@ -487,3 +605,4 @@ export function PartDetailClient({
     </div>
   );
 }
+

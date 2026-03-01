@@ -3,10 +3,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { isAdminUser } from "@/lib/permissions";
+import { normalizeSeasonYear } from "@/lib/part-number";
 
 const createSchema = z.object({
   name: z.string().min(2),
-  season: z.string().min(4).max(4)
+  season: z.string().min(1)
 });
 
 export async function GET(request: NextRequest) {
@@ -36,11 +37,15 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) {
     return parsed.response;
   }
+  const season = normalizeSeasonYear(parsed.data.season);
+  if (!season) {
+    return jsonError("Season year is required.", 400);
+  }
 
   const project = await prisma.project.create({
     data: {
       name: parsed.data.name,
-      season: parsed.data.season
+      season
     }
   });
 

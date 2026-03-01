@@ -117,9 +117,7 @@ export async function POST(request: NextRequest) {
 
   const isAdmin = await isAdminUser(userResult);
   const effectivePrimaryOwnerId = isAdmin ? parsed.data.primaryOwnerId : userResult;
-  const collaboratorIds = [...new Set(parsed.data.collaboratorIds)].filter(
-    (id) => id !== effectivePrimaryOwnerId
-  );
+  const collaboratorIds = [...new Set(parsed.data.collaboratorIds)];
 
   let created;
   try {

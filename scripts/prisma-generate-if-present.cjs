@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { existsSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
 

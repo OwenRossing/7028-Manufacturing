@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jsonError, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { isAdminUser } from "@/lib/permissions";
 
 export async function GET(
   request: NextRequest,
@@ -22,6 +23,10 @@ export async function GET(
   });
   if (!batch) {
     return jsonError("Import batch not found.", 404);
+  }
+  const isAdmin = await isAdminUser(userResult);
+  if (!isAdmin && batch.startedById !== userResult) {
+    return jsonError("You do not have permission to view this import batch.", 403);
   }
 
   return NextResponse.json(batch);

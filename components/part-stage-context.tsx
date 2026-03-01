@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { ORDER, statusLabel } from "@/lib/status";
+import { mediaUrlFromStorageKey } from "@/lib/media-url";
 
 type BoardPart = {
   id: string;
@@ -20,11 +21,9 @@ type BoardPart = {
 
 export function PartStageContext({
   currentPartId,
-  currentStatus,
   parts
 }: {
   currentPartId: string;
-  currentStatus: PartStatus;
   parts: BoardPart[];
 }) {
   const [liveParts, setLiveParts] = useState<BoardPart[]>(parts);
@@ -125,7 +124,7 @@ export function PartStageContext({
                           {part.photoStorageKey ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={`/uploads/${part.photoStorageKey}`}
+                              src={mediaUrlFromStorageKey(part.photoStorageKey)}
                               alt={part.name}
                               className="h-full w-full object-cover"
                             />
@@ -152,3 +151,4 @@ export function PartStageContext({
     </section>
   );
 }
+

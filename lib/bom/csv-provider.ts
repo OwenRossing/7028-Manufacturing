@@ -122,19 +122,15 @@ export class CsvOnshapeBomProvider implements BomImportProvider {
       });
 
       const partNumber = (partNumberHeader ? raw[partNumberHeader] : "").trim();
-      const name = (nameHeader ? raw[nameHeader] : "").trim();
+      const name = (nameHeader ? raw[nameHeader] : "").trim() || partNumber;
       const quantityRaw = quantityHeader ? raw[quantityHeader] : undefined;
       const errorsBeforeQuantity = errors.length;
       const quantityNeeded = parseQuantity(quantityRaw, csvRow, quantityHeader, errors);
       const externalKey = externalKeyHeader ? raw[externalKeyHeader]?.trim() : undefined;
 
       if (!partNumber) {
-        errors.push({
-          row: csvRow,
-          column: partNumberHeader,
-          message: "Part number is required.",
-          raw: partNumberHeader ? raw[partNumberHeader] : line
-        });
+        // Skip empty/non-part rows from exported BOMs.
+        return;
       }
 
       if (!name) {
@@ -146,7 +142,7 @@ export class CsvOnshapeBomProvider implements BomImportProvider {
         });
       }
 
-      if (!partNumber || !name) {
+      if (!name) {
         return;
       }
       if (errors.length > errorsBeforeQuantity) {
