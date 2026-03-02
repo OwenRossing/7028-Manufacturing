@@ -348,7 +348,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       return;
     }
     setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));
-  }, [activeTab]);
+  }, [activeTab, mobileActive]);
 
   useEffect(() => {
     if (activeTab || partIdFromQuery) return;
