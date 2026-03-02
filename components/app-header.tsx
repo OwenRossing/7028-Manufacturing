@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { AddPartControl } from "@/components/add-part-control";
 import { isProjectScopedPath } from "@/lib/route-scope";
 import { queryKeys } from "@/lib/query-keys";
+import { buildWorkspaceHref, normalizeWorkspaceTab } from "@/lib/workspace-navigation";
 
 type ProjectOption = {
   id: string;
@@ -31,6 +32,7 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
   const paramsString = searchParams.toString();
   const params = useMemo(() => new URLSearchParams(paramsString), [paramsString]);
   const activeTab = params.get("tab");
+  const normalizedTab = normalizeWorkspaceTab(activeTab);
   const [projectOpen, setProjectOpen] = useState(false);
   const projectRef = useRef<HTMLDivElement | null>(null);
   const activeProjectId = params.get("projectId");
@@ -54,10 +56,8 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
 
   useEffect(() => {
     if (pathname !== "/" || activeProjectId || projects.length === 0) return;
-    const nextParams = new URLSearchParams(paramsString);
-    nextParams.set("projectId", projects[0].id);
-    router.replace(`/?${nextParams.toString()}`, { scroll: false });
-  }, [pathname, activeProjectId, projects, paramsString, router]);
+    router.replace(buildWorkspaceHref(normalizedTab, projects[0].id), { scroll: false });
+  }, [pathname, activeProjectId, projects, normalizedTab, router]);
 
   useEffect(() => {
     function onMouseDown(event: MouseEvent) {
@@ -89,17 +89,15 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
   const overviewActive = pathname === "/" && isOverviewTab;
   const accountActive = pathname.startsWith("/settings") || pathname.startsWith("/projects");
 
-  const overviewHref = useMemo(() => {
-    const next = new URLSearchParams(paramsString);
-    next.set("tab", "overview");
-    return `/?${next.toString()}`;
-  }, [paramsString]);
+  const overviewHref = useMemo(
+    () => buildWorkspaceHref("overview", activeProjectId),
+    [activeProjectId]
+  );
 
-  const boardHref = useMemo(() => {
-    const next = new URLSearchParams(paramsString);
-    next.set("tab", "board");
-    return `/?${next.toString()}`;
-  }, [paramsString]);
+  const boardHref = useMemo(
+    () => buildWorkspaceHref("board", activeProjectId),
+    [activeProjectId]
+  );
 
   function topTabClass(active: boolean): string {
     return [
@@ -135,15 +133,14 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
               <div className="absolute right-0 mt-2 w-64 rounded-sm border border-steel-700 bg-steel-900 p-2 shadow-2xl">
                 <p className="px-2 pb-2 text-xs uppercase tracking-wide text-steel-300">Project</p>
                 {projects.map((project) => {
-                  const nextParams = new URLSearchParams(paramsString);
-                  nextParams.set("projectId", project.id);
+                  const nextHref = buildWorkspaceHref(normalizedTab, project.id);
                   return (
                     <button
                       key={project.id}
                       type="button"
                       onClick={() => {
-                        if (pathname === "/") router.replace(`/?${nextParams.toString()}`, { scroll: false });
-                        else router.push(`/?${nextParams.toString()}`);
+                        if (pathname === "/") router.replace(nextHref, { scroll: false });
+                        else router.push(nextHref);
                         setProjectOpen(false);
                       }}
                       className={`mb-1 block w-full rounded-sm border px-2 py-2 text-left text-sm ${

@@ -5,12 +5,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { buildWorkspaceHref } from "@/lib/workspace-navigation";
 
 export function AppBottomBar({ completed, total }: { completed: number; total: number }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const paramsString = searchParams.toString();
   const activeProjectId = searchParams.get("projectId");
   const metricsQueryString = useMemo(() => {
     const next = new URLSearchParams();
@@ -35,15 +35,11 @@ export function AppBottomBar({ completed, total }: { completed: number; total: n
   const accountActive = pathname.startsWith("/settings") || pathname.startsWith("/projects");
 
   function goOverview() {
-    const next = new URLSearchParams(paramsString);
-    next.set("tab", "overview");
-    router.push(`/?${next.toString()}`);
+    router.push(buildWorkspaceHref("overview", activeProjectId));
   }
 
   function goBoard() {
-    const next = new URLSearchParams(paramsString);
-    next.set("tab", "board");
-    router.push(`/?${next.toString()}`);
+    router.push(buildWorkspaceHref("board", activeProjectId));
   }
 
   return (

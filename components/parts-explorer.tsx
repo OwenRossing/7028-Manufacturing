@@ -344,7 +344,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       return;
     }
     if (activeTab === "board") {
-      setView("HOME");
+      setView(mobileActive ? "HOME" : "STAGE");
       return;
     }
     setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));
@@ -1353,10 +1353,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <select
                     value={statusToStage(selectedPart.status)}
                     onChange={(event) =>
+                      {
+                        const nextStage = event.target.value as WorkflowStage;
                       requestStageMove(
                         selectedPart.id,
-                        canonicalStatusForStage(event.target.value as WorkflowStage)
-                      )
+                        canonicalStatusForStage(nextStage),
+                        nextStage
+                      );
+                      }
                     }
                     disabled={!canEditSelectedPart || moveMutation.isPending}
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
@@ -1446,10 +1450,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   <select
                     value={statusToStage(selectedPart.status)}
                     onChange={(event) =>
+                      {
+                        const nextStage = event.target.value as WorkflowStage;
                       requestStageMove(
                         selectedPart.id,
-                        canonicalStatusForStage(event.target.value as WorkflowStage)
-                      )
+                        canonicalStatusForStage(nextStage),
+                        nextStage
+                      );
+                      }
                     }
                     disabled={!canEditSelectedPart || moveMutation.isPending}
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
@@ -1841,4 +1849,3 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     </section>
   );
 }
-
