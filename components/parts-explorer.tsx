@@ -344,7 +344,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       return;
     }
     if (activeTab === "board") {
-      setView("STAGE");
+      setView("HOME");
       return;
     }
     setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));

@@ -75,7 +75,6 @@ export default async function SettingsPage() {
         <Link href="/">
           <Card className="clickable-surface space-y-2">
             <h2 className="text-lg font-semibold text-white">Back To Workspace</h2>
-            <p className="text-sm text-steel-300">Return to Home, Community, and Parts flow.</p>
           </Card>
         </Link>
       </div>
