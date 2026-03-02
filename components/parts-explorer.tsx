@@ -344,7 +344,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       return;
     }
     if (activeTab === "board") {
-      setView(mobileActive ? "HOME" : "STAGE");
+      setView("HOME");
       return;
     }
     setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));
@@ -1841,3 +1841,4 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     </section>
   );
 }
+
