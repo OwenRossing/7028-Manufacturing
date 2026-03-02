@@ -37,63 +37,54 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <section className="space-y-4 p-4">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Account</h1>
-        <p className="text-sm text-steel-300">
-          {user ? user.displayName : "Signed out"}
-        </p>
-        <div className="mt-3">
+    <section className="mx-auto w-full max-w-6xl space-y-5 p-4">
+      <Card className="border border-[#3a4f66] bg-[linear-gradient(120deg,rgba(23,32,44,0.96),rgba(33,46,62,0.92))] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[#8fa6be]">Profile</p>
+            <h1 className="mt-1 text-3xl font-bold text-white">{user ? user.displayName : "Account"}</h1>
+          </div>
           <SignOutButton />
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-steel-300">Open Parts</p>
-          <p className="text-2xl font-semibold text-white">{myOpen}</p>
-        </Card>
-        <Card className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-steel-300">Completed Parts</p>
-          <p className="text-2xl font-semibold text-white">{myDone}</p>
-        </Card>
-        <Card className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-steel-300">Projects</p>
-          <p className="text-2xl font-semibold text-white">{managedProjects}</p>
-        </Card>
-      </div>
-
-      <Card className="space-y-2">
-        <h2 className="text-lg font-semibold text-white">Permission Rules</h2>
-        <p className="text-sm text-steel-300">
-          Signed-in non-admin users can claim open roles and then edit parts they are assigned to.
-        </p>
-        <div className="space-y-1 text-sm text-steel-200">
-          <p>Signed out: read-only.</p>
-          <p>Signed in (not assigned): can claim open machinist/finisher roles.</p>
-          <p>Signed in (assigned): can edit status, owners, details, and media for assigned parts.</p>
-          <p>Admin: can manage all parts and admin tools.</p>
         </div>
       </Card>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="border border-[#30475f] bg-[#1a2431] p-4">
+          <p className="text-xs uppercase tracking-wide text-[#8fa6be]">Open parts</p>
+          <p className="mt-2 text-3xl font-semibold text-[#d7e7f7]">{myOpen}</p>
+        </Card>
+        <Card className="border border-[#30475f] bg-[#1a2431] p-4">
+          <p className="text-xs uppercase tracking-wide text-[#8fa6be]">Completed</p>
+          <p className="mt-2 text-3xl font-semibold text-[#d7e7f7]">{myDone}</p>
+        </Card>
+        <Card className="border border-[#30475f] bg-[#1a2431] p-4">
+          <p className="text-xs uppercase tracking-wide text-[#8fa6be]">Projects</p>
+          <p className="mt-2 text-3xl font-semibold text-[#d7e7f7]">{managedProjects}</p>
+        </Card>
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2">
+        <Link href="/?tab=board" className="block">
+          <Card className="clickable-surface border border-[#315170] bg-[linear-gradient(135deg,rgba(24,36,49,0.95),rgba(34,50,68,0.92))] p-4">
+            <h2 className="text-lg font-semibold text-white">Workspace</h2>
+            <p className="mt-1 text-sm text-[#9fb2c6]">Return to board and active parts queue.</p>
+          </Card>
+        </Link>
         {isAdmin ? (
-          <Link href="/projects">
-            <Card className="clickable-surface space-y-2">
-              <h2 className="text-lg font-semibold text-white">Project Admin</h2>
-              <p className="text-sm text-steel-300">Create projects and run admin tasks.</p>
+          <Link href="/projects" className="block">
+            <Card className="clickable-surface border border-[#315170] bg-[linear-gradient(135deg,rgba(24,36,49,0.95),rgba(34,50,68,0.92))] p-4">
+              <h2 className="text-lg font-semibold text-white">Admin tools</h2>
+              <p className="mt-1 text-sm text-[#9fb2c6]">Manage projects, teams, and workspace config.</p>
             </Card>
           </Link>
         ) : null}
-        <Link href="/">
-          <Card className="clickable-surface space-y-2">
-            <h2 className="text-lg font-semibold text-white">Back To Workspace</h2>
-            <p className="text-sm text-steel-300">Return to Home, Community, and Parts flow.</p>
-          </Card>
-        </Link>
       </div>
 
-      {isAdmin ? <AdminUsersPanel /> : null}
+      {isAdmin ? (
+        <Card className="border border-[#2f465f] bg-[#182330] p-1 sm:p-2">
+          <AdminUsersPanel />
+        </Card>
+      ) : null}
     </section>
   );
 }
