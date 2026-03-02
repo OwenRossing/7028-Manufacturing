@@ -522,20 +522,13 @@ export function AddPartControl({ className }: { className?: string }) {
       ) : null}
 
       {wizardOpen ? (
-        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/45 p-4">
-          <div className="max-h-[92dvh] w-full max-w-[760px] overflow-hidden rounded-[6px] border border-[#3f4a5b] bg-[#2b313d] shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
+        <div className="fixed inset-0 z-[75] flex items-start justify-center overflow-y-auto bg-black/45 p-3 sm:items-center sm:p-4">
+          <div className="my-4 max-h-[92dvh] w-full max-w-[760px] overflow-hidden rounded-[6px] border border-[#3f4a5b] bg-[#2b313d] shadow-[0_30px_80px_rgba(0,0,0,0.55)] sm:my-0">
             <div className="flex items-center justify-between border-b border-[#3f4a5b] px-6 py-4">
               <div>
                 <h2 className="text-2xl font-semibold text-[#dcdedf]">
                   {mode === "MANUAL" ? "Manual Add" : mode === "IMPORT_CSV" ? "Import BOM CSV" : "Grab From Onshape"}
                 </h2>
-                <p className="text-sm text-[#9aa8b8]">
-                  {mode === "MANUAL"
-                    ? "Set fields and create the part."
-                    : mode === "IMPORT_CSV"
-                    ? "Upload CSV, preview changes, then commit."
-                    : "Select Onshape document/workspace/assembly, preview changes, then commit."}
-                </p>
               </div>
               <button
                 onClick={() => setWizardOpen(false)}
@@ -545,7 +538,7 @@ export function AddPartControl({ className }: { className?: string }) {
               </button>
             </div>
 
-            <div className="max-h-[calc(92dvh-148px)] space-y-4 overflow-y-auto px-6 py-4">
+            <div className="max-h-[calc(92dvh-96px)] space-y-4 overflow-y-auto px-6 py-4 [overscroll-behavior:contain] [touch-action:pan-y]">
               {mode === "MANUAL" ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="md:col-span-2">

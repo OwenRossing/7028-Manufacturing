@@ -48,6 +48,7 @@ type MainView = "HOME" | "STAGE" | "DETAIL" | "OVERVIEW";
 type SubsystemKey = string;
 const MOBILE_BREAKPOINT = 1024;
 const EDGE_SWIPE_CLOSE_PX = 80;
+const EDGE_SWIPE_OPEN_PX = 70;
 const EDGE_SWIPE_INTENT_RATIO = 1.5;
 
 function stageCollectionLabel(stage: WorkflowStage): string {
@@ -138,6 +139,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const closeSwipeActiveRef = useRef(false);
   const closeSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const openSwipeActiveRef = useRef(false);
+  const openSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const previousProjectIdRef = useRef<string | null>(null);
   const previousListViewRef = useRef<MainView>("HOME");
   const queryClient = useQueryClient();
@@ -182,6 +185,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const [detailPhotos, setDetailPhotos] = useState<DetailPhoto[]>([]);
   const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null);
   const [viewportWidth, setViewportWidth] = useState(MOBILE_BREAKPOINT);
+  const [mobileDetailSwipeOffset, setMobileDetailSwipeOffset] = useState(0);
   const mobileActive = viewportWidth < MOBILE_BREAKPOINT;
 
   const queryString = useMemo(() => {
@@ -340,11 +344,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       return;
     }
     if (activeTab === "board") {
-      setView("STAGE");
+      setView(mobileActive ? "HOME" : "STAGE");
       return;
     }
     setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));
-  }, [activeTab]);
+  }, [activeTab, mobileActive]);
 
   useEffect(() => {
     if (activeTab || partIdFromQuery) return;
@@ -777,6 +781,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const stageItems = useMemo(() => sorted.filter((part) => stageForItem(part) === activeStage), [sorted, activeStage]);
   const mobileDetailOpen = mobileActive && view === "DETAIL" && Boolean(selectedPartId);
   const mobileBoardMode = mobileActive && activeTab === "board";
+  const mobileListMenuOpen = mobileBoardMode && view === "HOME" && !mobileDetailOpen;
   const communityLeaderboard = useMemo(() => {
     const counts = new Map<string, { total: number; completed: number }>();
     for (const part of sorted) {
@@ -824,7 +829,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     }
     if (Math.abs(dx) <= Math.abs(dy) * EDGE_SWIPE_INTENT_RATIO) {
       closeSwipeActiveRef.current = false;
+      setMobileDetailSwipeOffset(0);
+      return;
     }
+    setMobileDetailSwipeOffset(Math.max(0, dx));
   }
 
   function onDetailTouchEnd(event: TouchEvent<HTMLDivElement>) {
@@ -839,8 +847,43 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     closeSwipeActiveRef.current = false;
     const dx = touch.clientX - start.x;
     const dy = touch.clientY - start.y;
+    setMobileDetailSwipeOffset(0);
     if (dx >= EDGE_SWIPE_CLOSE_PX && Math.abs(dx) > Math.abs(dy) * EDGE_SWIPE_INTENT_RATIO) {
       closeMobileDetail();
+    }
+  }
+
+  function onBoardTouchStart(event: TouchEvent<HTMLDivElement>) {
+    if (!mobileBoardMode || view !== "STAGE" || !selectedPartId) return;
+    const touch = event.touches[0];
+    if (!touch || touch.clientX > 28) return;
+    openSwipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+    openSwipeActiveRef.current = true;
+  }
+
+  function onBoardTouchMove(event: TouchEvent<HTMLDivElement>) {
+    if (!openSwipeActiveRef.current) return;
+    const start = openSwipeStartRef.current;
+    const touch = event.touches[0];
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dx <= 0 || Math.abs(dx) <= Math.abs(dy) * EDGE_SWIPE_INTENT_RATIO) {
+      openSwipeActiveRef.current = false;
+    }
+  }
+
+  function onBoardTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    if (!openSwipeActiveRef.current) return;
+    const start = openSwipeStartRef.current;
+    const touch = event.changedTouches[0];
+    openSwipeStartRef.current = null;
+    openSwipeActiveRef.current = false;
+    if (!start || !touch || !selectedPartId) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (dx >= EDGE_SWIPE_OPEN_PX && Math.abs(dx) > Math.abs(dy) * EDGE_SWIPE_INTENT_RATIO) {
+      openPartDetail(selectedPartId);
     }
   }
 
@@ -848,10 +891,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     <section className="relative grid h-[calc(100dvh-104px)] min-h-0 overflow-hidden grid-cols-1 grid-rows-[1fr] lg:grid-cols-[392px_1fr] lg:grid-rows-1">
       <aside
         className={`relative z-30 h-full min-h-0 flex-col border-r border-[#0e141b] bg-[#24282f] ${
-          mobileBoardMode
+          mobileListMenuOpen
             ? "absolute inset-0 flex w-full border-r-0"
             : "hidden lg:flex"
-        } ${mobileBoardMode ? "z-10" : ""}`}
+        } ${mobileListMenuOpen ? "z-10" : ""}`}
       >
         <div className={`bg-[#171d25] px-2 pb-3 pt-2 ${mobileBoardMode && mobileDetailOpen ? "hidden" : ""}`}>
           <button
@@ -1066,7 +1109,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       </aside>
       <div
         className={`h-full min-h-0 overflow-hidden bg-steel-850 ${
-          mobileBoardMode && !mobileDetailOpen ? "hidden" : ""
+          mobileListMenuOpen ? "hidden" : ""
         } ${
           mobileActive && view === "DETAIL"
             ? "absolute inset-0 z-30 w-full border-l-0 shadow-none transition-transform duration-200 ease-out"
@@ -1074,7 +1117,22 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         } ${
           mobileActive && view === "DETAIL" && !mobileDetailOpen ? "translate-x-full pointer-events-none" : ""
         } relative z-10`}
+        style={mobileDetailOpen ? { transform: `translateX(${mobileDetailSwipeOffset}px)` } : undefined}
+        onTouchStart={onBoardTouchStart}
+        onTouchMove={onBoardTouchMove}
+        onTouchEnd={onBoardTouchEnd}
       >
+        {mobileBoardMode && view !== "HOME" && !mobileDetailOpen ? (
+          <div className="px-3 pt-3 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setView("HOME")}
+              className="rounded-[3px] border border-[#324960] bg-[#222c38] px-3 py-1.5 text-xs font-semibold text-[#c7d5e0]"
+            >
+              Parts menu
+            </button>
+          </div>
+        ) : null}
         {feedback ? (
           <div className="pointer-events-none fixed right-4 top-[62px] z-[60]">
             <div
@@ -1783,5 +1841,3 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     </section>
   );
 }
-
-

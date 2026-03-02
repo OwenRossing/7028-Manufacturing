@@ -113,7 +113,7 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 bg-[#171d25]">
-      <div className="border-b border-[#233246] px-3 py-0.5 text-center text-[11px] text-[#8fa0b2]">
+      <div className="border-b border-[#233246] px-3 py-0.5 text-center text-[11px] text-[#8fa0b2] lg:hidden">
         {liveCompleted} of {liveTotal} complete
       </div>
       <div className="flex flex-wrap items-center gap-3 px-4 py-2">
