@@ -143,6 +143,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const openSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const previousProjectIdRef = useRef<string | null>(null);
   const previousListViewRef = useRef<MainView>("HOME");
+  const hasHydratedSelectionRef = useRef(false);
   const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -344,7 +345,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       return;
     }
     if (activeTab === "board") {
-      setView(mobileActive ? "HOME" : "STAGE");
+      setView(mobileActive ? "STAGE" : "HOME");
       return;
     }
     setView((prev) => (prev === "OVERVIEW" ? "HOME" : prev));
@@ -368,10 +369,19 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   }, [activeTab, mobileActive, partIdFromQuery, selectedPartId, view]);
 
   useEffect(() => {
-    if (partIdFromQuery) {
-      setSelectedPartId(partIdFromQuery);
-      return;
+    if (!hasHydratedSelectionRef.current) {
+      if (partIdFromQuery && sorted.some((part) => part.id === partIdFromQuery)) {
+        setSelectedPartId(partIdFromQuery);
+        hasHydratedSelectionRef.current = true;
+        return;
+      }
+      if (sorted.length) {
+        setSelectedPartId(sorted[0].id);
+        hasHydratedSelectionRef.current = true;
+        return;
+      }
     }
+
     if (!selectedPartId && sorted.length) {
       setSelectedPartId(sorted[0].id);
       return;
@@ -399,14 +409,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       previousProjectIdRef.current = projectId;
       return;
     }
-    if (previousProjectId !== projectId && partIdFromQuery) {
-      const nextParams = new URLSearchParams(paramsString);
-      nextParams.delete("partId");
-      const nextHref = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
-      router.replace(nextHref, { scroll: false });
+    if (previousProjectId !== projectId) {
+      hasHydratedSelectionRef.current = false;
     }
     previousProjectIdRef.current = projectId;
-  }, [paramsString, partIdFromQuery, pathname, projectId, router]);
+  }, [projectId]);
 
   useEffect(() => {
     if (!selectedPartId) {
@@ -715,14 +722,6 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     setPreviewMedia({ storageKey: photo.storageKey, mimeType: photo.mimeType });
   }
 
-  const setPartIdQuery = useCallback((nextPartId: string | null, historyMode: "push" | "replace") => {
-    const nextParams = new URLSearchParams(paramsString);
-    if (nextPartId) nextParams.set("partId", nextPartId);
-    else nextParams.delete("partId");
-    const nextHref = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
-    if (historyMode === "push") router.push(nextHref, { scroll: false });
-    else router.replace(nextHref, { scroll: false });
-  }, [paramsString, pathname, router]);
 
   function openPartDetail(partId: string) {
     if (view !== "DETAIL") {
@@ -731,17 +730,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     setSelectedPartId(partId);
     setView("DETAIL");
     setDetailPanel("main");
-    if (!mobileActive) {
-      setPartIdQuery(partId, "push");
-    }
   }
 
   function closeMobileDetail() {
     const fallbackView = previousListViewRef.current === "DETAIL" ? "HOME" : previousListViewRef.current;
     setView(fallbackView);
-    if (!mobileActive) {
-      setPartIdQuery(null, "replace");
-    }
   }
 
   function postNoteMessage() {
@@ -799,12 +792,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   }, [sorted]);
 
   useEffect(() => {
-    if (!partIdFromQuery || query.isPending) return;
+    if (!partIdFromQuery || query.isPending || hasHydratedSelectionRef.current) return;
     const exists = sorted.some((part) => part.id === partIdFromQuery);
     if (exists) return;
     setFeedback({ kind: "warning", text: "Part not found." });
-    setPartIdQuery(null, "replace");
-  }, [partIdFromQuery, query.isPending, setPartIdQuery, sorted]);
+  }, [partIdFromQuery, query.isPending, sorted]);
 
   function onDetailTouchStart(event: TouchEvent<HTMLDivElement>) {
     if (!mobileDetailOpen) return;
