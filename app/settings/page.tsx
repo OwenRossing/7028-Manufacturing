@@ -63,19 +63,6 @@ export default async function SettingsPage() {
         </Card>
       </div>
 
-      <Card className="space-y-2">
-        <h2 className="text-lg font-semibold text-white">Permission Rules</h2>
-        <p className="text-sm text-steel-300">
-          Signed-in non-admin users can claim open roles and then edit parts they are assigned to.
-        </p>
-        <div className="space-y-1 text-sm text-steel-200">
-          <p>Signed out: read-only.</p>
-          <p>Signed in (not assigned): can claim open machinist/finisher roles.</p>
-          <p>Signed in (assigned): can edit status, owners, details, and media for assigned parts.</p>
-          <p>Admin: can manage all parts and admin tools.</p>
-        </div>
-      </Card>
-
       <div className="grid gap-3 md:grid-cols-2">
         {isAdmin ? (
           <Link href="/projects">
