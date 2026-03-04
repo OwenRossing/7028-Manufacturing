@@ -28,27 +28,30 @@ export function AppShell({
   const hideChrome = pathname.startsWith("/login");
   const isWorkspacePath = pathname === "/" || pathname.startsWith("/parts") || pathname.startsWith("/import");
   const shellClassName = isWorkspacePath
-    ? "h-[100dvh] overflow-hidden bg-[#1b2838] text-white"
+    ? "fixed inset-0 flex overflow-hidden bg-[#1b2838] text-white"
     : "min-h-screen bg-[#1b2838] text-white";
+  const shellInnerClassName = isWorkspacePath ? "flex w-full min-h-0 flex-1 flex-col" : "w-full";
   const mainClassName = hideChrome
     ? "w-full"
     : isWorkspacePath
-      ? "w-full overflow-hidden pb-12"
+      ? "min-h-0 w-full flex-1 overflow-hidden pb-12"
       : "w-full pb-12";
 
   return (
     <div className={shellClassName}>
-      {!hideChrome ? (
-        <Suspense fallback={null}>
-          <AppHeader projects={projects} completed={completed} total={total} />
-        </Suspense>
-      ) : null}
-      <main className={mainClassName}>{children}</main>
-      {!hideChrome ? (
-        <Suspense fallback={null}>
-          <AppBottomBar completed={completed} total={total} />
-        </Suspense>
-      ) : null}
+      <div className={shellInnerClassName}>
+        {!hideChrome ? (
+          <Suspense fallback={null}>
+            <AppHeader projects={projects} completed={completed} total={total} />
+          </Suspense>
+        ) : null}
+        <main className={mainClassName}>{children}</main>
+        {!hideChrome ? (
+          <Suspense fallback={null}>
+            <AppBottomBar completed={completed} total={total} />
+          </Suspense>
+        ) : null}
+      </div>
     </div>
   );
 }

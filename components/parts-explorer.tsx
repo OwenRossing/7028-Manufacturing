@@ -887,14 +887,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   }
 
   return (
-    <section className="relative grid h-[calc(100dvh-104px)] min-h-0 overflow-hidden grid-cols-1 grid-rows-[1fr] lg:grid-cols-[392px_1fr] lg:grid-rows-1">
+    <section className="relative grid h-full min-h-0 overflow-hidden grid-cols-1 grid-rows-[1fr] lg:grid-cols-[392px_1fr] lg:grid-rows-1">
       <aside
-        className={`relative h-full min-h-0 flex-col border-r border-[#0e141b] bg-[#24282f] ${
+        className={`relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] border-r border-[#0e141b] bg-[#24282f] ${
           mobileBoardMode
-            ? "absolute inset-0 z-10 flex w-full border-r-0"
+            ? "absolute inset-0 z-10 w-full border-r-0"
             : mobileListMenuOpen
-              ? "absolute inset-0 z-10 flex w-full border-r-0"
-              : "z-30 hidden lg:flex"
+              ? "absolute inset-0 z-10 w-full border-r-0"
+              : "z-30 hidden lg:grid"
         }`}
         onTouchStart={onBoardTouchStart}
         onTouchMove={onBoardTouchMove}
@@ -1028,7 +1028,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
           ) : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+        <div className="min-h-0 overflow-y-auto pb-3">
           {[...STAGE_ORDER].sort((a, b) => stageCollectionSort(a) - stageCollectionSort(b)).map((stage) => {
             const items = byStage[stage];
             const stageActive = view === "STAGE" && activeStage === stage;
@@ -1117,7 +1117,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         } ${
           mobileBoardDetailLayer || (mobileActive && view === "DETAIL")
             ? "absolute inset-0 z-30 w-full border-l-0 shadow-none transition-transform duration-200 ease-out"
-            : ""
+            : "relative z-10"
         } ${
           mobileBoardDetailLayer
             ? !mobileDetailOpen
@@ -1126,7 +1126,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             : mobileActive && view === "DETAIL" && !mobileDetailOpen
               ? "translate-x-full pointer-events-none"
               : ""
-        } relative z-10`}
+        }`}
         style={mobileDetailOpen ? { transform: `translateX(${mobileDetailSwipeOffset}px)` } : undefined}
         onTouchStart={onBoardTouchStart}
         onTouchMove={onBoardTouchMove}
