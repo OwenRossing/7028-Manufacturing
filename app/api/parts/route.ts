@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   const ownerId = searchParams.get("ownerId");
   const sort = searchParams.get("sort") ?? "recent";
   const page = Number.parseInt(searchParams.get("page") ?? "1", 10);
-  const pageSize = Math.min(Number.parseInt(searchParams.get("pageSize") ?? "25", 10), 100);
+  const pageSize = Math.min(Number.parseInt(searchParams.get("pageSize") ?? "25", 10), 500);
 
   const where: Prisma.PartWhereInput = {
     ...(q

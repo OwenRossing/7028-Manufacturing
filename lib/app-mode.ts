@@ -6,7 +6,7 @@ function normalizeMode(value: string | undefined): AppMode {
 }
 
 export function appMode(): AppMode {
-  return normalizeMode(process.env.NEXT_PUBLIC_APP_MODE ?? process.env.APP_MODE);
+  return normalizeMode(process.env.APP_MODE);
 }
 
 export function isDemoMode(): boolean {

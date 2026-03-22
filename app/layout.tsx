@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { prisma } from "@/lib/db";
 import { Providers } from "@/components/providers";
@@ -8,6 +8,10 @@ import { AppShell } from "@/components/app-shell";
 export const metadata: Metadata = {
   title: "FRC Parts Tracker Demo",
   description: "Manufactured parts tracker for FRC robotics teams."
+};
+
+export const viewport: Viewport = {
+  viewportFit: "cover"
 };
 
 export const dynamic = "force-dynamic";

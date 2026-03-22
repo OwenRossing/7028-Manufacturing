@@ -47,20 +47,16 @@ function checkPresent(name: string): CheckResult {
   };
 }
 
-function checkGoogleClientPair(): CheckResult {
-  const server = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
-  const client = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
-  if (!server || !client) {
-    return { name: "Google IDs", ok: false, detail: "GOOGLE_CLIENT_ID or NEXT_PUBLIC_GOOGLE_CLIENT_ID missing" };
+function checkGoogleClientId(): CheckResult {
+  const value = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
+  if (!value) {
+    return { name: "GOOGLE_CLIENT_ID", ok: false, detail: "missing (Google sign-in will be disabled)" };
   }
-  if (server !== client) {
-    return { name: "Google IDs", ok: false, detail: "Server/client IDs do not match" };
-  }
-  const looksLikeGoogleId = /\.apps\.googleusercontent\.com$/.test(server);
+  const looksLikeGoogleId = /\.apps\.googleusercontent\.com$/.test(value);
   return {
-    name: "Google IDs",
+    name: "GOOGLE_CLIENT_ID",
     ok: looksLikeGoogleId,
-    detail: looksLikeGoogleId ? "matching IDs with expected suffix" : "IDs do not look like Google OAuth client IDs"
+    detail: looksLikeGoogleId ? `present (${masked(value)})` : "does not look like a Google OAuth client ID"
   };
 }
 
@@ -208,9 +204,7 @@ async function main(): Promise<void> {
   loadDotEnvIntoProcess();
   const results: CheckResult[] = [];
   results.push(checkPresent("DATABASE_URL"));
-  results.push(checkPresent("GOOGLE_CLIENT_ID"));
-  results.push(checkPresent("NEXT_PUBLIC_GOOGLE_CLIENT_ID"));
-  results.push(checkGoogleClientPair());
+  results.push(checkGoogleClientId());
   results.push(checkDatabaseUrlFormat());
   results.push(await checkDatabaseTcp());
   results.push(checkPresent("ONSHAPE_ACCESS_KEY"));

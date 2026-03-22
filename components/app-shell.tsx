@@ -45,7 +45,7 @@ export function AppShell({
             <AppHeader projects={projects} completed={completed} total={total} />
           </Suspense>
         ) : null}
-        <main className={mainClassName}>{children}</main>
+        <main className={mainClassName} style={isWorkspacePath ? undefined : { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 48px)" }}>{children}</main>
         {!hideChrome ? (
           <Suspense fallback={null}>
             <AppBottomBar completed={completed} total={total} />

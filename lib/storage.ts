@@ -36,7 +36,7 @@ function getStorageKey(originalName: string): string {
 }
 
 function getStorageBaseUrl(): string | null {
-  const baseUrl = env.STORAGE_PUBLIC_BASE_URL?.trim();
+  const baseUrl = env.NEXT_PUBLIC_STORAGE_PUBLIC_BASE_URL?.trim();
   if (!baseUrl) return null;
   return baseUrl.replace(/\/+$/g, "");
 }
@@ -75,7 +75,7 @@ export class S3StorageProvider implements StorageProvider {
     }
     const publicBaseUrl = getStorageBaseUrl();
     if (!publicBaseUrl) {
-      throw new Error("S3 storage requires STORAGE_PUBLIC_BASE_URL.");
+      throw new Error("S3 storage requires NEXT_PUBLIC_STORAGE_PUBLIC_BASE_URL.");
     }
 
     this.bucket = env.S3_BUCKET;

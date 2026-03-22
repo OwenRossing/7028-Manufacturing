@@ -262,108 +262,126 @@ export function ProjectAdminPanel({
         </div>
       </Card>
 
-      <Card className="space-y-3">
-        <h2 className="text-lg font-semibold text-white">Part Numbering Admin</h2>
+      <Card className="space-y-4">
+        <h2 className="text-lg font-semibold text-white">Part Number Configuration</h2>
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
-            <p className="text-sm font-semibold text-white">Team Number</p>
-            <Input
-              value={teamNumber}
-              onChange={(event) => setTeamNumber(sanitizeTeamNumber(event.target.value))}
-              maxLength={TEAM_NUMBER_MAX_LENGTH}
-              placeholder="7028"
-            />
-            <Button disabled={busy || !teamNumber} onClick={() => addConfig({ kind: "TEAM", teamNumber })}>
-              Add Team
-            </Button>
-            <p className="text-xs text-steel-300">
-              Existing: {workspaceConfig.teamNumbers.length ? workspaceConfig.teamNumbers.join(", ") : "none"}
-            </p>
+
+          {/* Team Numbers */}
+          <div className="flex flex-col gap-3 rounded-md border border-steel-700 bg-steel-850 p-3">
+            <p className="text-sm font-semibold text-white">Teams</p>
+            <div className="flex min-h-[2rem] flex-wrap gap-1">
+              {workspaceConfig.teamNumbers.length ? workspaceConfig.teamNumbers.map((team) => (
+                <span key={team} className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100">{team}</span>
+              )) : <span className="text-xs text-steel-400">None added yet</span>}
+            </div>
+            <div className="mt-auto flex gap-2">
+              <Input
+                value={teamNumber}
+                onChange={(event) => setTeamNumber(sanitizeTeamNumber(event.target.value))}
+                maxLength={TEAM_NUMBER_MAX_LENGTH}
+                placeholder="7028"
+              />
+              <Button disabled={busy || !teamNumber} onClick={() => { void addConfig({ kind: "TEAM", teamNumber }); setTeamNumber(""); }}>
+                Add
+              </Button>
+            </div>
           </div>
-          <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
-            <p className="text-sm font-semibold text-white">Robot Number</p>
-            <Select value={robotTeam} onChange={(event) => setRobotTeam(event.target.value)}>
-              {workspaceConfig.teamNumbers.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </Select>
-            <Select value={robotYear} onChange={(event) => setRobotYear(event.target.value)}>
-              {workspaceConfig.seasonYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </Select>
-            <Input value={robotNumber} onChange={(event) => setRobotNumber(event.target.value.replace(/\D/g, "").slice(0, 2))} placeholder="Robot" />
-            <Button
-              disabled={busy || !robotTeam || !robotYear || !robotNumber}
-              onClick={() => addConfig({ kind: "ROBOT", teamNumber: robotTeam, seasonYear: robotYear, robotNumber })}
-            >
-              Add Robot
-            </Button>
-            <p className="text-xs text-steel-300">
-              Existing: {workspaceConfig.robotNumbers.length
-                ? workspaceConfig.robotNumbers.map((item) => `${item.teamNumber}-${item.seasonYear}-${item.robotNumber}`).join(", ")
-                : "none"}
-            </p>
+
+          {/* Robot Numbers */}
+          <div className="flex flex-col gap-3 rounded-md border border-steel-700 bg-steel-850 p-3">
+            <p className="text-sm font-semibold text-white">Robots</p>
+            <div className="flex min-h-[2rem] flex-wrap gap-1">
+              {workspaceConfig.robotNumbers.length ? workspaceConfig.robotNumbers.map((item) => (
+                <span key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}`} className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100">
+                  {item.teamNumber}-{item.seasonYear}-{item.robotNumber}
+                </span>
+              )) : <span className="text-xs text-steel-400">None added yet</span>}
+            </div>
+            <div className="mt-auto space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                <Select value={robotTeam} onChange={(event) => setRobotTeam(event.target.value)}>
+                  <option value="">Team</option>
+                  {workspaceConfig.teamNumbers.map((team) => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </Select>
+                <Input
+                  value={robotYear}
+                  onChange={(event) => setRobotYear(normalizeSeasonYear(event.target.value))}
+                  placeholder="26"
+                  inputMode="numeric"
+                  maxLength={2}
+                />
+                <Input
+                  value={robotNumber}
+                  onChange={(event) => setRobotNumber(event.target.value.replace(/\D/g, "").slice(0, 2))}
+                  placeholder="Robot #"
+                  inputMode="numeric"
+                />
+              </div>
+              <Button
+                className="w-full"
+                disabled={busy || !robotTeam || robotYear.length !== 2 || !robotNumber}
+                onClick={() => { void addConfig({ kind: "ROBOT", teamNumber: robotTeam, seasonYear: robotYear, robotNumber }); setRobotNumber(""); }}
+              >
+                Add Robot
+              </Button>
+            </div>
           </div>
-          <div className="space-y-2 rounded-md border border-steel-700 bg-steel-850 p-3">
-            <p className="text-sm font-semibold text-white">Subsystem</p>
-            <Select value={subsystemTeam} onChange={(event) => setSubsystemTeam(event.target.value)}>
-              {workspaceConfig.teamNumbers.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </Select>
-            <Select value={subsystemYear} onChange={(event) => setSubsystemYear(event.target.value)}>
-              {workspaceConfig.seasonYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </Select>
-            <Select value={subsystemRobot} onChange={(event) => setSubsystemRobot(event.target.value)}>
-              <option value="">Select robot</option>
-              {robotChoices.map((robot) => (
-                <option key={robot} value={robot}>
-                  {robot}
-                </option>
-              ))}
-            </Select>
-            <Select value={subsystemNumber} onChange={(event) => setSubsystemNumber(event.target.value)}>
-              <option value="">Select subsystem</option>
-              {Array.from({ length: 10 }, (_, index) => String(index)).map((value) => (
-                <option key={value} value={value}>
-                  {value}000
-                </option>
-              ))}
-            </Select>
-            <Input value={subsystemLabel} onChange={(event) => setSubsystemLabel(event.target.value)} placeholder="Label (optional)" />
-            <Button
-              disabled={busy || !subsystemTeam || !subsystemYear || !subsystemRobot || !subsystemNumber}
-              onClick={() =>
-                addConfig({
-                  kind: "SUBSYSTEM",
-                  teamNumber: subsystemTeam,
-                  seasonYear: subsystemYear,
-                  robotNumber: subsystemRobot,
-                  subsystemNumber,
-                  label: subsystemLabel
-                })
-              }
-            >
-              Add Subsystem
-            </Button>
-            <p className="text-xs text-steel-300">
-              Existing: {workspaceConfig.subsystems.length
-                ? workspaceConfig.subsystems
-                    .map((item) => `${item.teamNumber}-${item.seasonYear}-${item.robotNumber}-${item.subsystemNumber}000${item.label ? ` (${item.label})` : ""}`)
-                    .join(", ")
-                : "none"}
-            </p>
+
+          {/* Subsystems */}
+          <div className="flex flex-col gap-3 rounded-md border border-steel-700 bg-steel-850 p-3">
+            <p className="text-sm font-semibold text-white">Subsystems</p>
+            <div className="flex min-h-[2rem] flex-wrap gap-1">
+              {workspaceConfig.subsystems.length ? workspaceConfig.subsystems.map((item) => (
+                <span key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}-${item.subsystemNumber}`} className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100">
+                  {item.subsystemNumber}000{item.label ? ` ${item.label}` : ""}
+                </span>
+              )) : <span className="text-xs text-steel-400">None added yet</span>}
+            </div>
+            <div className="mt-auto space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                <Select value={subsystemTeam} onChange={(event) => setSubsystemTeam(event.target.value)}>
+                  <option value="">Team</option>
+                  {workspaceConfig.teamNumbers.map((team) => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </Select>
+                <Input
+                  value={subsystemYear}
+                  onChange={(event) => setSubsystemYear(normalizeSeasonYear(event.target.value))}
+                  placeholder="26"
+                  inputMode="numeric"
+                  maxLength={2}
+                />
+                <Select value={subsystemRobot} onChange={(event) => setSubsystemRobot(event.target.value)}>
+                  <option value="">Robot</option>
+                  {robotChoices.map((robot) => (
+                    <option key={robot} value={robot}>{robot}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={subsystemNumber} onChange={(event) => setSubsystemNumber(event.target.value)}>
+                  <option value="">Subsystem</option>
+                  {Array.from({ length: 10 }, (_, index) => String(index)).map((value) => (
+                    <option key={value} value={value}>{value}000</option>
+                  ))}
+                </Select>
+                <Input value={subsystemLabel} onChange={(event) => setSubsystemLabel(event.target.value)} placeholder="Label" />
+              </div>
+              <Button
+                className="w-full"
+                disabled={busy || !subsystemTeam || subsystemYear.length !== 2 || !subsystemRobot || !subsystemNumber}
+                onClick={() => {
+                  void addConfig({ kind: "SUBSYSTEM", teamNumber: subsystemTeam, seasonYear: subsystemYear, robotNumber: subsystemRobot, subsystemNumber, label: subsystemLabel });
+                  setSubsystemNumber("");
+                  setSubsystemLabel("");
+                }}
+              >
+                Add Subsystem
+              </Button>
+            </div>
           </div>
         </div>
         {configMessage ? <p className="text-sm text-steel-200">{configMessage}</p> : null}

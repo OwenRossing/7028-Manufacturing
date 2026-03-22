@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const parsed = await parseJson(request, schema);
   if (!parsed.ok) return parsed.response;
 
-  const expectedClientId = env.GOOGLE_CLIENT_ID.trim();
+  const expectedClientId = env.GOOGLE_CLIENT_ID?.trim();
   if (!expectedClientId) {
     return jsonError("Google sign-in is not configured.", 503);
   }
