@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
-import { isDemoMode } from "@/lib/app-mode";
+import { isDemoMode, isLocalMode } from "@/lib/app-mode";
 
 export const AUTH_COOKIE_NAME = env.DEMO_SESSION_COOKIE;
 const SESSION_TTL_SECONDS = env.SESSION_TTL_SECONDS;
@@ -33,8 +33,8 @@ function isSecureCookieEnabled(): boolean {
   const override = process.env.AUTH_COOKIE_SECURE;
   if (override === "true") return true;
   if (override === "false") return false;
-  // Allow HTTP cookies in demo mode for LAN/device QA.
-  if (isDemoMode()) return false;
+  // Allow HTTP cookies in demo/local mode for LAN/device QA.
+  if (isDemoMode() || isLocalMode()) return false;
   return isProduction();
 }
 
