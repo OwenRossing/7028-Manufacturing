@@ -8,8 +8,6 @@ import { normalizeImportPrefixFilters } from "@/lib/imports/prefix";
 import { IMPORT_SOURCE_TYPE } from "@/lib/imports/source-type";
 import { OnshapeClient } from "@/lib/onshape/client";
 import { EnvOnshapeCredentialsProvider } from "@/lib/onshape/credentials";
-import { isAdminUser } from "@/lib/permissions";
-
 const schema = z.object({
   projectId: z.string().min(1),
   documentId: z.string().min(1),
@@ -27,10 +25,6 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) return userResult;
-  if (!(await isAdminUser(userResult))) {
-    return jsonError("Admin access required for BOM import.", 403);
-  }
-
   const parsed = await parseJson(request, schema);
   if (!parsed.ok) return parsed.response;
 

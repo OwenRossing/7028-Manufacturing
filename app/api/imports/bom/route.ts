@@ -5,8 +5,6 @@ import { jsonError, requireUser } from "@/lib/api";
 import { createImportPreviewBatch } from "@/lib/imports/preview-batch";
 import { normalizeImportPrefixFilters } from "@/lib/imports/prefix";
 import { IMPORT_SOURCE_TYPE } from "@/lib/imports/source-type";
-import { isAdminUser } from "@/lib/permissions";
-
 const provider = new CsvOnshapeBomProvider();
 
 export const runtime = "nodejs";
@@ -16,10 +14,6 @@ export async function POST(request: NextRequest) {
   if (userResult instanceof NextResponse) {
     return userResult;
   }
-  if (!(await isAdminUser(userResult))) {
-    return jsonError("Admin access required for BOM import.", 403);
-  }
-
   const formData = await request.formData();
   const projectId = formData.get("projectId");
   if (typeof projectId !== "string" || !projectId) {

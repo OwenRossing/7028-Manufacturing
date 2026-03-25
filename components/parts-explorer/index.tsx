@@ -16,6 +16,7 @@ import {
 import { PartListItem } from "@/types/parts";
 import { queryKeys } from "@/lib/query-keys";
 import { mediaUrlFromStorageKey } from "@/lib/media-url";
+import { generateUUID } from "@/lib/uuid";
 
 type PartsResponse = {
   items: PartListItem[];
@@ -472,7 +473,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-idempotency-key": crypto.randomUUID()
+          "x-idempotency-key": generateUUID()
         },
         body: JSON.stringify({ toStatus })
       });
@@ -752,7 +753,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     if (!selectedPartId) return;
     const text = noteInput.trim();
     if (!text) return;
-    const message: NoteMessage = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
+    const message: NoteMessage = { id: generateUUID(), text, createdAt: new Date().toISOString() };
     const next = [...noteMessages, message];
     setNoteMessages(next);
     setNoteInput("");

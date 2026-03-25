@@ -18,6 +18,7 @@ import {
 import { PartListItem } from "@/types/parts";
 import { queryKeys } from "@/lib/query-keys";
 import { mediaUrlFromStorageKey } from "@/lib/media-url";
+import { generateUUID } from "@/lib/uuid";
 
 type OwnerOption = {
   id: string;
@@ -146,7 +147,7 @@ export function PartDetailClient({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-idempotency-key": crypto.randomUUID()
+          "x-idempotency-key": generateUUID()
         },
         body: JSON.stringify({ toStatus: nextStatus })
       });

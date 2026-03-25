@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { generateUUID } from "@/lib/uuid";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -269,7 +270,7 @@ export function ImportBomClient({
     setError(null);
     const response = await fetch(`/api/imports/${batchId}/commit`, {
       method: "POST",
-      headers: { "x-idempotency-key": crypto.randomUUID() }
+      headers: { "x-idempotency-key": generateUUID() }
     });
     const data = (await response.json().catch(() => null)) as { error?: string; summary?: string } | null;
     if (!response.ok) {
@@ -287,7 +288,7 @@ export function ImportBomClient({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-idempotency-key": crypto.randomUUID()
+        "x-idempotency-key": generateUUID()
       },
       body: JSON.stringify({
         projectId,

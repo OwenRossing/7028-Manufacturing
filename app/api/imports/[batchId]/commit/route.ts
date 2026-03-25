@@ -3,8 +3,6 @@ import { jsonError, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { getIdempotentResponse, storeIdempotentResponse } from "@/lib/idempotency";
 import { commitImportBatch } from "@/lib/imports/commit-batch";
-import { isAdminUser } from "@/lib/permissions";
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ batchId: string }> }
@@ -13,10 +11,6 @@ export async function POST(
   if (userResult instanceof NextResponse) {
     return userResult;
   }
-  if (!(await isAdminUser(userResult))) {
-    return jsonError("Admin access required for BOM commit.", 403);
-  }
-
   const { batchId } = await params;
   const token = request.headers.get("x-idempotency-key");
   const scope = `import-commit:${batchId}`;

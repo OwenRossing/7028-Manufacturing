@@ -4,6 +4,7 @@ import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PlusSquare, Upload, X } from "lucide-react";
 import { buildSubsystemPartCode, normalizeSeasonYear, sanitizeTeamNumber } from "@/lib/part-number";
+import { generateUUID } from "@/lib/uuid";
 
 type MenuPoint = {
   x: number;
@@ -131,7 +132,6 @@ export function AddPartControl({ className }: { className?: string }) {
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
   const [loadingElements, setLoadingElements] = useState(false);
   const [selectorError, setSelectorError] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [roleLoaded, setRoleLoaded] = useState(false);
 
   useEffect(() => {
@@ -158,8 +158,7 @@ export function AddPartControl({ className }: { className?: string }) {
         if (!response.ok) throw new Error("Unable to load current user role.");
         return (await response.json()) as MeResponse;
       })
-      .then((data) => setIsAdmin(Boolean(data.isAdmin)))
-      .catch(() => setIsAdmin(false))
+      .catch(() => {})
       .finally(() => setRoleLoaded(true));
 
     void fetch("/api/config/options")
@@ -240,11 +239,6 @@ export function AddPartControl({ className }: { className?: string }) {
   }
 
   function openWizard(nextMode: AddMode) {
-    if (!isAdmin && nextMode !== "MANUAL") {
-      setInfo("Admin access required for BOM import and Onshape actions.");
-      setMenuPoint(null);
-      return;
-    }
     setMode(nextMode);
     setInfo(null);
     setBatchId(null);
@@ -436,7 +430,7 @@ export function AddPartControl({ className }: { className?: string }) {
     setInfo(null);
     const response = await fetch(`/api/imports/${batchId}/commit`, {
       method: "POST",
-      headers: { "x-idempotency-key": crypto.randomUUID() }
+      headers: { "x-idempotency-key": generateUUID() }
     });
     const data = (await response.json().catch(() => null)) as { error?: string; summary?: string } | null;
     if (!response.ok) {
@@ -506,17 +500,15 @@ export function AddPartControl({ className }: { className?: string }) {
           </button>
           <button
             onClick={() => openWizard("ONSHAPE")}
-            disabled={!isAdmin}
-            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160] disabled:cursor-not-allowed disabled:opacity-55"
+            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]"
           >
-            Grab From Onshape {!roleLoaded ? "(Loading...)" : isAdmin ? "" : "(Admin only)"}
+            Grab From Onshape
           </button>
           <button
             onClick={() => openWizard("IMPORT_CSV")}
-            disabled={!isAdmin}
-            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160] disabled:cursor-not-allowed disabled:opacity-55"
+            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]"
           >
-            Import BOM CSV {!roleLoaded ? "(Loading...)" : isAdmin ? "" : "(Admin only)"}
+            Import BOM CSV
           </button>
         </div>
       ) : null}

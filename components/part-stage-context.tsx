@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { ORDER, statusLabel } from "@/lib/status";
 import { mediaUrlFromStorageKey } from "@/lib/media-url";
+import { generateUUID } from "@/lib/uuid";
 
 type BoardPart = {
   id: string;
@@ -37,7 +38,7 @@ export function PartStageContext({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-idempotency-key": crypto.randomUUID()
+          "x-idempotency-key": generateUUID()
         },
         body: JSON.stringify({ toStatus })
       });

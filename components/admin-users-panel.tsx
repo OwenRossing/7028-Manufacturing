@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 type AdminUser = {
@@ -17,6 +18,11 @@ type UsersResponse = {
 
 export function AdminUsersPanel() {
   const queryClient = useQueryClient();
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const query = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
@@ -46,35 +52,130 @@ export function AdminUsersPanel() {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Unable to delete user.");
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (payload: { displayName: string; email: string }) => {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Unable to create user.");
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      setNewName("");
+      setNewEmail("");
+      setShowCreate(false);
+      setCreateError(null);
+    },
+    onError: (err: Error) => {
+      setCreateError(err.message);
+    }
+  });
+
+  function submitCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreateError(null);
+    createMutation.mutate({ displayName: newName.trim(), email: newEmail.trim() });
+  }
+
   return (
     <div className="space-y-3 rounded-[3px] border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-      <div>
-        <h2 className="text-lg font-semibold text-white">Admin Accounts</h2>
-        <p className="text-sm text-steel-300">Promote or demote team admins.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Team Accounts</h2>
+          <p className="text-sm text-steel-300">Manage who can access the app.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => { setShowCreate((v) => !v); setCreateError(null); }}
+          className="rounded-[3px] border border-[#2f6eb6] bg-[#1a9fff]/20 px-3 py-1 text-xs text-[#d7efff] hover:bg-[#1a9fff]/40"
+        >
+          {showCreate ? "Cancel" : "+ Add User"}
+        </button>
       </div>
+
+      {showCreate ? (
+        <form onSubmit={submitCreate} className="space-y-2 rounded-[3px] border border-[#31465f] bg-[#1d2633] p-3">
+          <input
+            type="text"
+            placeholder="Display name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            required
+            className="w-full rounded border border-[#3b4c63] bg-[#151e29] px-3 py-1.5 text-sm text-[#d6e4f2] placeholder-[#5a7a99] outline-none focus:border-[#5a8ab5]"
+          />
+          <input
+            type="email"
+            placeholder="Email address"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            required
+            className="w-full rounded border border-[#3b4c63] bg-[#151e29] px-3 py-1.5 text-sm text-[#d6e4f2] placeholder-[#5a7a99] outline-none focus:border-[#5a8ab5]"
+          />
+          {createError ? <p className="text-xs text-red-400">{createError}</p> : null}
+          <button
+            type="submit"
+            disabled={createMutation.isPending || !newName.trim() || !newEmail.trim()}
+            className="w-full rounded bg-[#2563eb] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {createMutation.isPending ? "Creating..." : "Create User"}
+          </button>
+        </form>
+      ) : null}
 
       {query.isLoading ? <p className="text-sm text-steel-300">Loading users...</p> : null}
       {query.error ? <p className="text-sm text-red-300">{query.error.message}</p> : null}
 
       <div className="space-y-2">
         {(query.data?.items ?? []).map((user) => (
-          <div key={user.id} className="flex items-center justify-between rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2">
-            <div className="min-w-0">
+          <div key={user.id} className="flex items-center justify-between gap-2 rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-[#d6e4f2]">{user.displayName}</p>
               <p className="truncate text-xs text-[#9fb0c2]">{user.email}</p>
             </div>
-            <button
-              type="button"
-              disabled={toggleMutation.isPending || user.isSelf}
-              onClick={() => toggleMutation.mutate({ userId: user.id, isAdmin: !user.isAdmin })}
-              className={`rounded-[3px] border px-2 py-1 text-xs ${
-                user.isAdmin
-                  ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#d7efff]"
-                  : "border-[#435266] bg-[#3a4659] text-[#c7d5e0]"
-              } disabled:cursor-not-allowed disabled:opacity-60`}
-            >
-              {user.isSelf ? "You" : user.isAdmin ? "Admin" : "User"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={toggleMutation.isPending || user.isSelf}
+                onClick={() => toggleMutation.mutate({ userId: user.id, isAdmin: !user.isAdmin })}
+                className={`rounded-[3px] border px-2 py-1 text-xs ${
+                  user.isAdmin
+                    ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#d7efff]"
+                    : "border-[#435266] bg-[#3a4659] text-[#c7d5e0]"
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                {user.isSelf ? "You" : user.isAdmin ? "Admin" : "User"}
+              </button>
+              {!user.isSelf ? (
+                <button
+                  type="button"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => { if (confirm(`Remove ${user.displayName}?`)) deleteMutation.mutate(user.id); }}
+                  className="rounded-[3px] border border-[#5a2a2a] bg-[#3a1a1a] px-2 py-1 text-xs text-[#ff9999] hover:bg-[#4a2020] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
