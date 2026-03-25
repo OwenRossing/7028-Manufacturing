@@ -1,8 +1,9 @@
-import { isDemoMode } from "@/lib/app-mode";
+import { isDemoMode, isLocalMode } from "@/lib/app-mode";
 import LoginClient from "./login-client";
 
 export default function LoginPage() {
   const googleClientId = process.env.GOOGLE_CLIENT_ID ?? null;
   const demoMode = isDemoMode();
-  return <LoginClient googleClientId={googleClientId} demoMode={demoMode} />;
+  const localMode = isLocalMode();
+  return <LoginClient googleClientId={googleClientId} demoMode={demoMode} localMode={localMode} />;
 }

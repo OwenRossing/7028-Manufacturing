@@ -26,7 +26,8 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: optionalStr,
   S3_SECRET_ACCESS_KEY: optionalStr,
   S3_FORCE_PATH_STYLE: z.coerce.boolean().default(false),
-  APP_MODE: z.enum(["demo", "production"]).optional(),
+  APP_MODE: z.enum(["demo", "local", "production"]).optional(),
+  LOCAL_ENTRY_KEY: optionalStr,
   NODE_ENV: z.enum(["development", "test", "production"]).optional()
 });
 
