@@ -491,22 +491,22 @@ export function AddPartControl({ className }: { className?: string }) {
 
       {menuPoint ? (
         <div
-          className="fixed z-[70] w-[260px] border border-[#4a5160] bg-[#3d4450] text-[#dcdedf] shadow-2xl"
+          className="fixed z-[70] w-[260px] border border-rim-soft bg-surface-hover text-ink-alt shadow-2xl"
           style={menuStyle}
           onClick={(event) => event.stopPropagation()}
         >
-          <button onClick={() => openWizard("MANUAL")} className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]">
+          <button onClick={() => openWizard("MANUAL")} className="block w-full px-6 py-4 text-left hover:bg-surface-hover">
             Manual
           </button>
           <button
             onClick={() => openWizard("ONSHAPE")}
-            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]"
+            className="block w-full px-6 py-4 text-left hover:bg-surface-hover"
           >
             Grab From Onshape
           </button>
           <button
             onClick={() => openWizard("IMPORT_CSV")}
-            className="block w-full px-6 py-4 text-left hover:bg-[#4a5160]"
+            className="block w-full px-6 py-4 text-left hover:bg-surface-hover"
           >
             Import BOM CSV
           </button>
@@ -515,16 +515,16 @@ export function AddPartControl({ className }: { className?: string }) {
 
       {wizardOpen ? (
         <div className="fixed inset-0 z-[75] flex items-start justify-center overflow-y-auto bg-black/45 p-3 sm:items-center sm:p-4">
-          <div className="my-4 max-h-[92dvh] w-full max-w-[760px] overflow-hidden rounded-[6px] border border-[#3f4a5b] bg-[#2b313d] shadow-[0_30px_80px_rgba(0,0,0,0.55)] sm:my-0">
-            <div className="flex items-center justify-between border-b border-[#3f4a5b] px-6 py-4">
+          <div className="my-4 max-h-[92dvh] w-full max-w-[760px] overflow-hidden rounded-[6px] border border-rim-soft bg-surface-raised shadow-[0_30px_80px_rgba(0,0,0,0.55)] sm:my-0">
+            <div className="flex items-center justify-between border-b border-rim-soft px-6 py-4">
               <div>
-                <h2 className="text-2xl font-semibold text-[#dcdedf]">
+                <h2 className="text-2xl font-semibold text-ink-alt">
                   {mode === "MANUAL" ? "Manual Add" : mode === "IMPORT_CSV" ? "Import BOM CSV" : "Grab From Onshape"}
                 </h2>
               </div>
               <button
                 onClick={() => setWizardOpen(false)}
-                className="rounded-[3px] border border-[#4b5668] bg-[#364052] p-2 text-[#dcdedf] hover:bg-[#445065]"
+                className="rounded-[3px] border border-rim-btn bg-surface-btn p-2 text-ink-alt hover:bg-surface-btn-hover"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -534,19 +534,19 @@ export function AddPartControl({ className }: { className?: string }) {
               {mode === "MANUAL" ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Part Name</label>
+                    <label className="mb-1 block text-sm text-ink-label">Part Name</label>
                     <input
                       value={name}
                       onChange={(event) => setName(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Team #</label>
+                    <label className="mb-1 block text-sm text-ink-label">Team #</label>
                     <select
                       value={teamNumber}
                       onChange={(event) => setTeamNumber(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     >
                       {teamOptions.map((value) => (
                         <option key={value} value={value}>{value}</option>
@@ -554,11 +554,11 @@ export function AddPartControl({ className }: { className?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Year (25, 26...)</label>
+                    <label className="mb-1 block text-sm text-ink-label">Year (25, 26...)</label>
                     <select
                       value={seasonYear}
                       onChange={(event) => setSeasonYear(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     >
                       {yearOptions.map((value) => (
                         <option key={value} value={value}>{value}</option>
@@ -566,11 +566,11 @@ export function AddPartControl({ className }: { className?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Robot #</label>
+                    <label className="mb-1 block text-sm text-ink-label">Robot #</label>
                     <select
                       value={robotNumber}
                       onChange={(event) => setRobotNumber(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     >
                       {(robotOptions.length ? robotOptions : [robotNumber || "1"]).map((value) => (
                         <option key={value} value={value}>{value}</option>
@@ -578,12 +578,12 @@ export function AddPartControl({ className }: { className?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Subsystem #</label>
+                    <label className="mb-1 block text-sm text-ink-label">Subsystem #</label>
                     {subsystemOptions.length ? (
                       <select
                         value={subsystemNumber}
                         onChange={(event) => setSubsystemNumber(event.target.value)}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                       >
                         <option value="">Select subsystem</option>
                         {subsystemOptions.map((item) => (
@@ -596,34 +596,34 @@ export function AddPartControl({ className }: { className?: string }) {
                       <input
                         value={subsystemNumber}
                         onChange={(event) => setSubsystemNumber(event.target.value.replace(/\D/g, "").slice(0, 1))}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                         inputMode="numeric"
                       />
                     )}
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Part #</label>
+                    <label className="mb-1 block text-sm text-ink-label">Part #</label>
                     <input
                       value={partSequence}
                       onChange={(event) => setPartSequence(event.target.value.replace(/\D/g, "").slice(0, 3))}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                       inputMode="numeric"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Generated Part ID</label>
+                    <label className="mb-1 block text-sm text-ink-label">Generated Part ID</label>
                     <input
                       value={partNumberPreview}
                       readOnly
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#1b222d] px-3 text-[#dcdedf]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-[#1b222d] px-3 text-ink-alt"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Priority</label>
+                    <label className="mb-1 block text-sm text-ink-label">Priority</label>
                     <select
                       value={priority}
                       onChange={(event) => setPriority(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     >
                       <option value="1">ASAP</option>
                       <option value="3">Normal</option>
@@ -631,35 +631,35 @@ export function AddPartControl({ className }: { className?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Quantity Required</label>
+                    <label className="mb-1 block text-sm text-ink-label">Quantity Required</label>
                     <input
                       value={quantityRequired}
                       onChange={(event) => setQuantityRequired(event.target.value.replace(/\D/g, ""))}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Quantity Complete</label>
+                    <label className="mb-1 block text-sm text-ink-label">Quantity Complete</label>
                     <input
                       value={quantityComplete}
                       onChange={(event) => setQuantityComplete(event.target.value.replace(/\D/g, ""))}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Material / Notes</label>
+                    <label className="mb-1 block text-sm text-ink-label">Material / Notes</label>
                     <input
                       value={description}
                       onChange={(event) => setDescription(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Machinist</label>
+                    <label className="mb-1 block text-sm text-ink-label">Machinist</label>
                     <select
                       value={machinistId}
                       onChange={(event) => setMachinistId(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     >
                       <option value="">Unassigned</option>
                       {users.map((user) => (
@@ -668,11 +668,11 @@ export function AddPartControl({ className }: { className?: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm text-[#9aa8b8]">Finisher</label>
+                    <label className="mb-1 block text-sm text-ink-label">Finisher</label>
                     <select
                       value={finisherId}
                       onChange={(event) => setFinisherId(event.target.value)}
-                      className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                      className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                     >
                       <option value="">Unassigned</option>
                       {users.map((user) => (
@@ -685,16 +685,16 @@ export function AddPartControl({ className }: { className?: string }) {
 
               {mode === "IMPORT_CSV" ? (
                 <div className="space-y-3">
-                  <p className="text-xs text-[#9aa8b8]">
+                  <p className="text-xs text-ink-label">
                     CSV and Onshape API previews can differ if source fields differ or Team/Year/Robot filters exclude rows.
                   </p>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div>
-                      <label className="mb-1 block text-sm text-[#9aa8b8]">Team #</label>
+                      <label className="mb-1 block text-sm text-ink-label">Team #</label>
                       <select
                         value={importTeamNumber}
                         onChange={(event) => setImportTeamNumber(event.target.value)}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                       >
                         {teamOptions.map((value) => (
                           <option key={value} value={value}>{value}</option>
@@ -702,11 +702,11 @@ export function AddPartControl({ className }: { className?: string }) {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm text-[#9aa8b8]">Year</label>
+                      <label className="mb-1 block text-sm text-ink-label">Year</label>
                       <select
                         value={importSeasonYear}
                         onChange={(event) => setImportSeasonYear(event.target.value)}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                       >
                         {yearOptions.map((value) => (
                           <option key={value} value={value}>{value}</option>
@@ -714,11 +714,11 @@ export function AddPartControl({ className }: { className?: string }) {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm text-[#9aa8b8]">Robot #</label>
+                      <label className="mb-1 block text-sm text-ink-label">Robot #</label>
                       <select
                         value={importRobotNumber}
                         onChange={(event) => setImportRobotNumber(event.target.value)}
-                        className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                        className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                       >
                         {importRobotOptions.map((value) => (
                           <option key={value} value={value}>{value}</option>
@@ -735,14 +735,14 @@ export function AddPartControl({ className }: { className?: string }) {
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-[4px] border border-[#3f4a5b] bg-[#202833] px-3 py-2 text-[#dcdedf] hover:bg-[#273140]"
+                    className="inline-flex items-center gap-2 rounded-[4px] border border-rim-soft bg-surface-modal px-3 py-2 text-ink-alt hover:bg-surface-card"
                   >
                     <Upload className="h-4 w-4" />
                     Choose CSV
                   </button>
-                  <p className="text-sm text-[#9aa8b8]">{fileName ?? "No file selected."}</p>
+                  <p className="text-sm text-ink-label">{fileName ?? "No file selected."}</p>
                   {summary ? (
-                    <p className="text-sm text-[#9aa8b8]">
+                    <p className="text-sm text-ink-label">
                       Rows: {summary.total}, Create: {summary.create}, Update: {summary.update}, No change:{" "}
                       {summary.noChange}, Errors: {summary.error}, Filtered out: {summary.filteredOut}. Active filter:{" "}
                       {formatActiveFilters(summary.filters, {
@@ -753,7 +753,7 @@ export function AddPartControl({ className }: { className?: string }) {
                     </p>
                   ) : null}
                   {rows.length ? (
-                    <div className="max-h-48 overflow-y-auto rounded-[4px] border border-[#3f4a5b] bg-[#202833] p-2 text-xs text-[#dcdedf]">
+                    <div className="max-h-48 overflow-y-auto rounded-[4px] border border-rim-soft bg-surface-modal p-2 text-xs text-ink-alt">
                       {rows.slice(0, 18).map((row) => (
                         <p key={row.rowIndex}>
                           #{row.rowIndex} {row.partNumber ?? "-"} {row.name ?? "-"} ({row.action})
@@ -767,10 +767,10 @@ export function AddPartControl({ className }: { className?: string }) {
 
               {mode === "ONSHAPE" ? (
                 <div className="space-y-3">
-                  <p className="text-xs text-[#9aa8b8]">
+                  <p className="text-xs text-ink-label">
                     Onshape API and CSV export previews may not match when payload shape differs or Team/Year/Robot filters drop rows.
                   </p>
-                  <label className="flex items-center gap-2 text-sm text-[#9aa8b8]">
+                  <label className="flex items-center gap-2 text-sm text-ink-label">
                     <input
                       type="checkbox"
                       checked={manualOnshapeIds}
@@ -781,44 +781,44 @@ export function AddPartControl({ className }: { className?: string }) {
                   {manualOnshapeIds ? (
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
-                        <label className="mb-1 block text-sm text-[#9aa8b8]">Document ID</label>
+                        <label className="mb-1 block text-sm text-ink-label">Document ID</label>
                         <input
                           value={documentId}
                           onChange={(event) => setDocumentId(event.target.value)}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                          className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm text-[#9aa8b8]">Workspace ID</label>
+                        <label className="mb-1 block text-sm text-ink-label">Workspace ID</label>
                         <input
                           value={workspaceId}
                           onChange={(event) => setWorkspaceId(event.target.value)}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                          className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm text-[#9aa8b8]">Assembly Element ID</label>
+                        <label className="mb-1 block text-sm text-ink-label">Assembly Element ID</label>
                         <input
                           value={elementId}
                           onChange={(event) => setElementId(event.target.value)}
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                          className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                         />
                       </div>
                     </div>
                   ) : (
                     <>
                       <div>
-                        <label className="mb-1 block text-sm text-[#9aa8b8]">Search Documents</label>
+                        <label className="mb-1 block text-sm text-ink-label">Search Documents</label>
                         <input
                           value={documentQuery}
                           onChange={(event) => setDocumentQuery(event.target.value)}
                           placeholder="Start typing a document name"
-                          className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                          className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                         />
                       </div>
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div>
-                          <label className="mb-1 block text-sm text-[#9aa8b8]">Document</label>
+                          <label className="mb-1 block text-sm text-ink-label">Document</label>
                           <select
                             value={documentId}
                             onChange={(event) => {
@@ -828,7 +828,7 @@ export function AddPartControl({ className }: { className?: string }) {
                               setWorkspaces([]);
                               setElements([]);
                             }}
-                            className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                            className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                             disabled={loadingDocuments}
                           >
                             <option value="">{loadingDocuments ? "Loading documents..." : "Select document"}</option>
@@ -838,7 +838,7 @@ export function AddPartControl({ className }: { className?: string }) {
                           </select>
                         </div>
                         <div>
-                          <label className="mb-1 block text-sm text-[#9aa8b8]">Workspace</label>
+                          <label className="mb-1 block text-sm text-ink-label">Workspace</label>
                           <select
                             value={workspaceId}
                             onChange={(event) => {
@@ -846,7 +846,7 @@ export function AddPartControl({ className }: { className?: string }) {
                               setElementId("");
                               setElements([]);
                             }}
-                            className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                            className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                             disabled={!documentId || loadingWorkspaces}
                           >
                             <option value="">
@@ -858,11 +858,11 @@ export function AddPartControl({ className }: { className?: string }) {
                           </select>
                         </div>
                         <div>
-                          <label className="mb-1 block text-sm text-[#9aa8b8]">Assembly Element</label>
+                          <label className="mb-1 block text-sm text-ink-label">Assembly Element</label>
                           <select
                             value={elementId}
                             onChange={(event) => setElementId(event.target.value)}
-                            className="h-10 w-full rounded-[3px] border border-[#3f4a5b] bg-[#202833] px-3 text-[#dcdedf] outline-none focus:border-[#1a9fff]"
+                            className="h-10 w-full rounded-[3px] border border-rim-soft bg-surface-modal px-3 text-ink-alt outline-none focus:border-rim-brand"
                             disabled={!workspaceId || loadingElements}
                           >
                             <option value="">
@@ -882,10 +882,10 @@ export function AddPartControl({ className }: { className?: string }) {
                     </p>
                   ) : null}
                   {!manualOnshapeIds && !loadingElements && workspaceId && !elements.length ? (
-                    <p className="text-sm text-[#9aa8b8]">No assembly elements found in this workspace.</p>
+                    <p className="text-sm text-ink-label">No assembly elements found in this workspace.</p>
                   ) : null}
                   {summary ? (
-                    <p className="text-sm text-[#9aa8b8]">
+                    <p className="text-sm text-ink-label">
                       Rows: {summary.total}, Create: {summary.create}, Update: {summary.update}, No change:{" "}
                       {summary.noChange}, Errors: {summary.error}, Filtered out: {summary.filteredOut}. Active filter:{" "}
                       {formatActiveFilters(summary.filters, {
@@ -896,7 +896,7 @@ export function AddPartControl({ className }: { className?: string }) {
                     </p>
                   ) : null}
                   {rows.length ? (
-                    <div className="max-h-48 overflow-y-auto rounded-[4px] border border-[#3f4a5b] bg-[#202833] p-2 text-xs text-[#dcdedf]">
+                    <div className="max-h-48 overflow-y-auto rounded-[4px] border border-rim-soft bg-surface-modal p-2 text-xs text-ink-alt">
                       {rows.slice(0, 18).map((row) => (
                         <p key={row.rowIndex}>
                           #{row.rowIndex} {row.partNumber ?? "-"} {row.name ?? "-"} ({row.action})
@@ -915,10 +915,10 @@ export function AddPartControl({ className }: { className?: string }) {
               ) : null}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-[#3f4a5b] px-6 py-4">
+            <div className="flex items-center justify-end gap-2 border-t border-rim-soft px-6 py-4">
               <button
                 onClick={() => setWizardOpen(false)}
-                className="rounded-[4px] border border-[#4b5668] bg-[#364052] px-4 py-2 text-[#dcdedf] hover:bg-[#445065]"
+                className="rounded-[4px] border border-rim-btn bg-surface-btn px-4 py-2 text-ink-alt hover:bg-surface-btn-hover"
               >
                 Cancel
               </button>
@@ -926,7 +926,7 @@ export function AddPartControl({ className }: { className?: string }) {
                 <button
                   onClick={submitManual}
                   disabled={manualBusy}
-                  className="rounded-[4px] border border-[#2f6eb6] bg-[#1a9fff] px-4 py-2 text-white hover:bg-[#3aaeff] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-[4px] border border-rim-brand-dark bg-brand-600 px-4 py-2 text-white hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {manualBusy ? "Creating..." : "Create Part"}
                 </button>
@@ -936,14 +936,14 @@ export function AddPartControl({ className }: { className?: string }) {
                   <button
                     onClick={previewCsv}
                     disabled={previewBusy}
-                    className="rounded-[4px] border border-[#3f4a5b] bg-[#202833] px-4 py-2 text-[#dcdedf] hover:bg-[#273140] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-[4px] border border-rim-soft bg-surface-modal px-4 py-2 text-ink-alt hover:bg-surface-card disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {previewBusy ? "Previewing..." : "Preview"}
                   </button>
                   <button
                     onClick={commitCsv}
                     disabled={!batchId || commitBusy}
-                    className="rounded-[4px] border border-[#2f6eb6] bg-[#1a9fff] px-4 py-2 text-white hover:bg-[#3aaeff] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-[4px] border border-rim-brand-dark bg-brand-600 px-4 py-2 text-white hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {commitBusy ? "Committing..." : "Commit"}
                   </button>
@@ -954,14 +954,14 @@ export function AddPartControl({ className }: { className?: string }) {
                   <button
                     onClick={previewOnshape}
                     disabled={previewBusy}
-                    className="rounded-[4px] border border-[#3f4a5b] bg-[#202833] px-4 py-2 text-[#dcdedf] hover:bg-[#273140] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-[4px] border border-rim-soft bg-surface-modal px-4 py-2 text-ink-alt hover:bg-surface-card disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {previewBusy ? "Previewing..." : "Preview"}
                   </button>
                   <button
                     onClick={commitCsv}
                     disabled={!batchId || commitBusy}
-                    className="rounded-[4px] border border-[#2f6eb6] bg-[#1a9fff] px-4 py-2 text-white hover:bg-[#3aaeff] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-[4px] border border-rim-brand-dark bg-brand-600 px-4 py-2 text-white hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {commitBusy ? "Committing..." : "Commit"}
                   </button>

@@ -102,15 +102,15 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
   function topTabClass(active: boolean): string {
     return [
       "relative inline-flex items-center pb-0.5 text-lg font-semibold md:text-2xl",
-      "after:absolute after:-bottom-[4px] after:left-0 after:h-[3px] after:rounded-full after:bg-[#1a9fff] after:transition-all",
+      "after:absolute after:-bottom-[4px] after:left-0 after:h-[3px] after:rounded-full after:bg-brand-600 after:transition-all",
       active
-        ? "text-[#1a9fff] after:w-full"
-        : "text-[#c7d5e0] hover:text-white after:w-0 hover:after:w-full"
+        ? "text-ink-brand after:w-full"
+        : "text-steel-300 hover:text-white after:w-0 hover:after:w-full"
     ].join(" ");
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-[#171d25]">
+    <header className="sticky top-0 z-50 bg-surface-header">
       <div className="border-b border-[#233246] px-3 py-0.5 text-center text-[11px] text-[#8fa0b2] lg:hidden">
         {liveCompleted} of {liveTotal} complete
       </div>
@@ -151,7 +151,7 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className={`truncate ${projectHealthClass(project.health)}`}>{project.name}</span>
-                        <span className="text-xs text-[#8f98a0]">
+                        <span className="text-xs text-ink-dim">
                           {project.done}/{project.total || 0}
                         </span>
                       </div>
@@ -165,7 +165,7 @@ export function AppHeader({ projects, completed, total }: AppHeaderProps) {
           <div className="ml-auto" />
         )}
         {isProjectScoped ? (
-          <AddPartControl className="inline-flex h-10 items-center gap-2 rounded-[3px] border border-[#2f6eb6] bg-[#1a9fff] px-3 text-sm font-semibold text-white hover:bg-[#3aaeff]" />
+          <AddPartControl className="inline-flex h-10 items-center gap-2 rounded-[3px] border border-rim-brand-dark bg-brand-600 px-3 text-sm font-semibold text-white hover:bg-brand-400" />
         ) : null}
       </div>
     </header>

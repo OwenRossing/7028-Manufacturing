@@ -3,11 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:db": "docker compose up -d db",
-    "dev:all": "npm run dev:db && npm run db:push && npm run prisma:seed && npm run dev",
+    "dev": "node scripts/dev.mjs",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/start.mjs",
     "ci:offline": "npm run lint && npm run typecheck:offline && npm run build",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "typecheck": "next typegen && tsc --noEmit",

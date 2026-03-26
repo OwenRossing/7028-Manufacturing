@@ -5,7 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search, ChevronDown, X, Settings } from "lucide-react";
+import { Search, ChevronDown, X, Settings, ImageIcon, StickyNote, Trophy, Layers } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import {
   canonicalStatusForStage,
   stageLabel,
@@ -70,16 +71,16 @@ function priorityTier(priority: number): PriorityTier {
 
 function priorityClass(priority: number): string {
   const tier = priorityTier(priority);
-  if (tier === "ASAP") return "border-red-400/70 bg-red-500/15";
-  if (tier === "NORMAL") return "border-emerald-400/70 bg-emerald-500/15";
-  return "border-slate-400/70 bg-slate-500/15";
+  if (tier === "ASAP")       return "border-red-500     bg-red-500/25";
+  if (tier === "NORMAL")     return "border-emerald-500 bg-emerald-500/20";
+  return                            "border-slate-500/60 bg-slate-600/20";
 }
 
 function priorityNameClass(priority: number): string {
   const tier = priorityTier(priority);
-  if (tier === "ASAP") return "text-red-300";
-  if (tier === "NORMAL") return "text-emerald-300";
-  return "text-slate-300";
+  if (tier === "ASAP")   return "text-red-400";
+  if (tier === "NORMAL") return "text-emerald-400";
+  return                        "text-slate-400";
 }
 
 function matchesSearch(part: PartListItem, search: string): boolean {
@@ -927,7 +928,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   return (
     <section className="relative grid h-full min-h-0 overflow-hidden grid-cols-1 grid-rows-[1fr] lg:grid-cols-[392px_1fr] lg:grid-rows-1">
       <aside
-        className={`relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] border-r border-[#0e141b] bg-[#24282f] ${
+        className={`relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] border-r border-[#0e141b] bg-surface-sidebar ${
           mobileBoardMode
             ? "absolute inset-0 z-10 w-full border-r-0"
             : mobileListMenuOpen
@@ -942,7 +943,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
           <button
             type="button"
             onClick={() => setView("HOME")}
-            className="mb-2 h-11 w-full rounded-[3px] bg-[#25272d] px-3 text-left text-[15px] font-normal text-[#c7d5e0] hover:bg-[#3e4047] active:bg-[#4a515a]"
+            className="mb-2 h-11 w-full rounded-[3px] bg-surface-nav px-3 text-left text-[15px] font-normal text-steel-300 hover:bg-[#3e4047] active:bg-surface-btn-hover"
           >
             Home
           </button>
@@ -952,14 +953,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               <button
                 type="button"
                 onClick={() => setTypeMenuOpen((prev) => !prev)}
-                className="inline-flex h-11 items-center justify-between rounded-[3px] bg-[#25272d] px-3 text-left text-[15px] font-normal text-[#c7d5e0]"
+                className="inline-flex h-11 items-center justify-between rounded-[3px] bg-surface-nav px-3 text-left text-[15px] font-normal text-steel-300"
               >
                 <span>Filters</span>
-                <ChevronDown className="h-4 w-4 text-[#8f98a0]" />
+                <ChevronDown className="h-4 w-4 text-ink-dim" />
               </button>
             </div>
             {typeMenuOpen ? (
-              <div className="absolute left-0 top-full z-[70] mt-1 max-h-[70vh] w-full overflow-y-auto border border-[#5a6473] bg-[#3d4a5d] p-2 text-sm text-[#c7d5e0]">
+              <div className="absolute left-0 top-full z-[70] mt-1 max-h-[70vh] w-full overflow-y-auto border border-[#5a6473] bg-[#3d4a5d] p-2 text-sm text-steel-300">
                 <label className="mb-2 flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -968,13 +969,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   />
                   <span>Show only my parts</span>
                   {currentUserId ? (
-                    <span className="text-[#8f98a0]">
+                    <span className="text-ink-dim">
                       ({liveItems.filter((item) => item.owners.some((owner) => owner.userId === currentUserId)).length})
                     </span>
                   ) : null}
                 </label>
                 <hr className="my-2 border-[#778090]" />
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#a8b6c7]">Priority</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-label">Priority</p>
                 <label className="mb-2 flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -982,7 +983,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     onChange={() => setPriorityFilters((prev) => ({ ...prev, ASAP: !prev.ASAP }))}
                   />
                   <span>ASAP</span>
-                  <span className="text-[#8f98a0]">
+                  <span className="text-ink-dim">
                     ({liveItems.filter((item) => priorityTier(item.priority) === "ASAP").length})
                   </span>
                 </label>
@@ -993,7 +994,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     onChange={() => setPriorityFilters((prev) => ({ ...prev, NORMAL: !prev.NORMAL }))}
                   />
                   <span>Normal</span>
-                  <span className="text-[#8f98a0]">
+                  <span className="text-ink-dim">
                     ({liveItems.filter((item) => priorityTier(item.priority) === "NORMAL").length})
                   </span>
                 </label>
@@ -1004,12 +1005,12 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     onChange={() => setPriorityFilters((prev) => ({ ...prev, BACKBURNER: !prev.BACKBURNER }))}
                   />
                   <span>Backburner</span>
-                  <span className="text-[#8f98a0]">
+                  <span className="text-ink-dim">
                     ({liveItems.filter((item) => priorityTier(item.priority) === "BACKBURNER").length})
                   </span>
                 </label>
                 <hr className="my-2 border-[#778090]" />
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#a8b6c7]">Subsystem</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-label">Subsystem</p>
                 {subsystemCounts.map(([key, count]) => (
                   <label key={key} className="mb-2 flex items-center gap-2">
                     <input
@@ -1023,41 +1024,41 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       }
                     />
                     <span>{subsystemLabel(key)}</span>
-                    <span className="text-[#8f98a0]">({count})</span>
+                    <span className="text-ink-dim">({count})</span>
                   </label>
                 ))}
               </div>
             ) : null}
           </div>
 
-          <div className="mb-2 flex h-11 items-center rounded-[3px] bg-[#25272d] px-3">
+          <div className="mb-2 flex h-11 items-center rounded-[3px] bg-surface-nav px-3">
             <div className={`flex h-9 w-full items-center gap-2 rounded-[3px] px-2 ${
               leftSearchFocused
                 ? "bg-[#1d2026] shadow-[inset_0_1px_2px_rgba(0,0,0,0.65),inset_0_-1px_0_rgba(255,255,255,0.04)]"
                 : "bg-[#23262d]"
             }`}>
-              <Search className="h-5 w-5 text-[#98a8b9]" />
+              <Search className="h-5 w-5 text-ink-dim" />
               <input
                 value={leftSearch}
                 onChange={(event) => setLeftSearch(event.target.value)}
                 onFocus={() => setLeftSearchFocused(true)}
                 onBlur={() => setLeftSearchFocused(false)}
                 placeholder="Search by Name"
-                className="w-full bg-transparent text-[15px] italic text-[#c7d5e0] outline-none placeholder:text-[#8d9cad]"
+                className="w-full bg-transparent text-[15px] italic text-steel-300 outline-none placeholder:text-ink-dim"
               />
               {leftSearch ? (
                 <button
                   type="button"
                   onClick={() => setLeftSearch("")}
-                  className="text-[#8f98a0] hover:text-[#c7d5e0]"
+                  className="text-ink-dim hover:text-steel-300"
                 >
                   <X className="h-5 w-5" />
                 </button>
               ) : null}
             </div>
           </div>
-          <div className="px-1 pb-1 text-[11px] text-[#8f98a0]">
-            Priority colors: <span className="text-red-300">ASAP</span>, <span className="text-emerald-300">Normal</span>, <span className="text-slate-300">Backburner</span>
+          <div className="px-1 pb-1 text-[11px] text-ink-dim">
+            Priority colors: <span className="text-red-400">ASAP</span>, <span className="text-emerald-400">Normal</span>, <span className="text-slate-400">Backburner</span>
           </div>
           {onlyMine && !currentUserId ? (
             <p className="mx-1 rounded-[3px] border border-yellow-500/40 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-200">
@@ -1097,11 +1098,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                             requestStageMove(partId, canonicalStatusForStage(stage), stage);
                           }}
                         >
-                          <div className={`flex items-center bg-gradient-to-r from-[#243850]/30 via-[#1f3046]/42 to-[#24282f] ${stageActive ? "text-[#cae4fb]" : "text-[#cae4fb]"}`}>
+                          <div className={`flex items-center bg-gradient-to-r from-[#243850]/30 via-[#1f3046]/42 to-[#24282f] ${stageActive ? "text-ink-bright" : "text-ink-bright"}`}>
                             <button
                               type="button"
                               onClick={() => setStageOpen((prev) => ({ ...prev, [stage]: !prev[stage] }))}
-                              className="inline-flex h-6 w-6 items-center justify-center text-[15px] text-[#7a8a9b] hover:text-[#cae4fb]"
+                              className="inline-flex h-6 w-6 items-center justify-center text-[15px] text-ink-dim hover:text-ink-bright"
                             >
                               {open ? "-" : "+"}
                             </button>
@@ -1111,10 +1112,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                                 setActiveStage(stage);
                                 setView(mobileBoardMode ? "HOME" : "STAGE");
                               }}
-                              className="flex flex-1 items-center justify-between pr-3 text-left text-[11px] font-semibold tracking-wide hover:text-[#cae4fb]"
+                              className="flex flex-1 items-center justify-between pr-3 text-left text-[11px] font-semibold tracking-wide hover:text-ink-bright"
                             >
                               <span>{stageCollectionLabel(stage)}</span>
-                              <span className="text-[11px] text-[#7a8a9b]">({items.length})</span>
+                              <span className="text-[11px] text-ink-dim">({items.length})</span>
                             </button>
                           </div>
                         </div>
@@ -1135,16 +1136,16 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                           onClick={() => {
                             openPartDetail(part.id);
                           }}
-                          className={`mr-2 flex min-h-[44px] w-[calc(100%-8px)] items-center gap-2 px-5 py-[3px] text-left active:bg-[#2a3d55] ${
+                          className={`mr-2 flex min-h-[44px] w-[calc(100%-8px)] items-center gap-2 px-5 py-[3px] text-left active:bg-steel-800 ${
                             selectedPartId === part.id
-                              ? "bg-[#3e4e69] text-[#cae4fb]"
-                              : "text-[#c7d5e0] hover:bg-[#2a3d55]"
+                              ? "bg-steel-700 text-ink-bright"
+                              : "text-steel-300 hover:bg-steel-800"
                           }`}
                         >
-                          <span className="h-4 w-4 flex-shrink-0 overflow-hidden bg-[#2a475e]">
+                          <span className="h-4 w-4 flex-shrink-0 overflow-hidden bg-steel-800">
                             {part.photos[0] ? (
                               isVideoStorageKey(part.photos[0].storageKey) ? (
-                                <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-[#9fb0c2]">V</div>
+                                <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-ink-muted">V</div>
                               ) : (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={mediaUrlFromStorageKey(part.photos[0].storageKey)} alt={part.name} loading="lazy" className="h-full w-full object-cover" />
@@ -1153,9 +1154,9 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                           </span>
                           <div className="min-w-0 flex-1">
                             <span className={`line-clamp-1 block text-[15px] leading-tight ${priorityNameClass(part.priority)}`}>{part.name}</span>
-                            <span className="line-clamp-1 block text-[11px] text-[#7f8ea0]">{part.partNumber}</span>
+                            <span className="line-clamp-1 block text-[11px] text-ink-dim">{part.partNumber}</span>
                           </div>
-                          <span className="rounded-full border border-white/20 bg-black/35 px-2 py-0.5 text-[10px] text-[#d6e4f2]">
+                          <span className="rounded-full border border-white/20 bg-black/35 px-2 py-0.5 text-[10px] text-ink">
                             {part.quantityComplete}/{part.quantityRequired}
                           </span>
                         </button>
@@ -1194,7 +1195,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             <button
               type="button"
               onClick={() => setView("HOME")}
-              className="rounded-[3px] border border-[#324960] bg-[#222c38] px-3 py-1.5 text-xs font-semibold text-[#c7d5e0]"
+              className="rounded-[3px] border border-[#324960] bg-[#222c38] px-3 py-1.5 text-xs font-semibold text-steel-300"
             >
               Parts menu
             </button>
@@ -1230,7 +1231,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     onClick={() => {
                       openPartDetail(part.id);
                     }}
-                    className={`relative h-[184px] overflow-hidden border text-left ${priorityClass(part.priority)}`}
+                    className={`relative h-[184px] overflow-hidden border text-left transition-all duration-150 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] ${priorityClass(part.priority)}`}
                   >
                     {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1247,7 +1248,12 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   </button>
                 ))}
               </div>
-              {!mostImportant.length ? <p className="text-sm text-steel-300">No parts to show in Most Important yet.</p> : null}
+              {!mostImportant.length ? (
+                <div className="flex flex-col items-center gap-1 py-6 text-ink-dim">
+                  <Layers className="h-6 w-6 opacity-40" />
+                  <p className="text-sm">No parts to show yet.</p>
+                </div>
+              ) : null}
             </section>
 
             <section>
@@ -1260,7 +1266,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     onClick={() => {
                       openPartDetail(part.id);
                     }}
-                    className={`relative h-[184px] overflow-hidden border text-left ${priorityClass(part.priority)}`}
+                    className={`relative h-[184px] overflow-hidden border text-left transition-all duration-150 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] ${priorityClass(part.priority)}`}
                   >
                     {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1277,20 +1283,25 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   </button>
                 ))}
               </div>
-              {!myParts.length ? <p className="text-sm text-steel-300">No parts assigned yet.</p> : null}
+              {!myParts.length ? (
+                <div className="flex flex-col items-center gap-1 py-6 text-ink-dim">
+                  <Layers className="h-6 w-6 opacity-40" />
+                  <p className="text-sm">No parts assigned to you yet.</p>
+                </div>
+              ) : null}
             </section>
           </div>
         ) : !mobileBoardMode && view === "OVERVIEW" ? (
           <div className="h-full overflow-y-auto p-4">
             <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-              <section className="rounded-[3px] border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
+              <section className="rounded-[3px] border border-rim bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
                 <h2 className="text-3xl font-semibold text-steel-100">Season Progress</h2>
                 <p className="mt-2 text-sm text-steel-300">
                   {sorted.filter((part) => stageForItem(part) === "COMPLETED").length} of {sorted.length} parts completed
                 </p>
                 <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#1c2635]">
                   <div
-                    className="h-full bg-[#1a9fff]"
+                    className="h-full bg-brand-600"
                     style={{
                       width: `${sorted.length ? Math.round((sorted.filter((part) => stageForItem(part) === "COMPLETED").length / sorted.length) * 100) : 0}%`
                     }}
@@ -1305,10 +1316,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         setActiveStage(stage);
                         setView("STAGE");
                       }}
-                      className="rounded-[3px] border border-[#31465f] bg-[#202a38] px-3 py-2 text-left hover:bg-[#263344]"
+                      className="rounded-[3px] border border-rim bg-[#202a38] px-3 py-2 text-left hover:bg-[#263344]"
                     >
-                      <p className="text-xs uppercase tracking-wide text-[#9fb0c2]">{stageLabel(stage)}</p>
-                      <p className="text-xl font-semibold text-[#d6e4f2]">{byStage[stage].length}</p>
+                      <p className="text-xs uppercase tracking-wide text-ink-muted">{stageLabel(stage)}</p>
+                      <p className="text-xl font-semibold text-ink">{byStage[stage].length}</p>
                     </button>
                   ))}
                 </div>
@@ -1320,13 +1331,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       const done = items.filter((part) => stageForItem(part) === "COMPLETED").length;
                       const pct = items.length ? Math.round((done / items.length) * 100) : 0;
                       return (
-                        <div key={key} className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2">
-                          <div className="flex items-center justify-between text-sm text-[#d6e4f2]">
+                        <div key={key} className="rounded-[3px] border border-rim bg-surface-card px-3 py-2">
+                          <div className="flex items-center justify-between text-sm text-ink">
                             <span>{subsystemLabel(key)}</span>
                             <span>{done}/{items.length}</span>
                           </div>
                           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#101721]">
-                            <div className="h-full bg-[#1a9fff]" style={{ width: `${pct}%` }} />
+                            <div className="h-full bg-brand-600" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       );
@@ -1334,19 +1345,24 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   </div>
                 </div>
               </section>
-              <section className="rounded-[3px] border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
+              <section className="rounded-[3px] border border-rim bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
                 <h3 className="text-2xl font-semibold text-steel-100">Leaderboard</h3>
                 <p className="text-sm text-steel-300">Top contributors this season.</p>
                 <div className="mt-3 space-y-2">
                   {communityLeaderboard.map((person, index) => (
-                    <div key={person.name} className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2">
-                      <p className="text-sm text-[#d6e4f2]">{index + 1}. {person.name}</p>
-                      <p className="text-xs text-[#9fb0c2]">
+                    <div key={person.name} className="rounded-[3px] border border-rim bg-surface-card px-3 py-2">
+                      <p className="text-sm text-ink">{index + 1}. {person.name}</p>
+                      <p className="text-xs text-ink-muted">
                         Completed: {person.completed} | Assigned: {person.total}
                       </p>
                     </div>
                   ))}
-                  {!communityLeaderboard.length ? <p className="text-sm text-steel-300">No contributor stats yet.</p> : null}
+                  {!communityLeaderboard.length ? (
+                    <div className="flex flex-col items-center gap-1 py-6 text-ink-dim">
+                      <Trophy className="h-6 w-6 opacity-40" />
+                      <p className="text-sm">No contributor stats yet.</p>
+                    </div>
+                  ) : null}
                 </div>
               </section>
             </div>
@@ -1378,7 +1394,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   onClick={() => {
                     openPartDetail(part.id);
                   }}
-                  className={`relative overflow-hidden border text-left ${priorityClass(part.priority)}`}
+                  className={`relative overflow-hidden border text-left transition-all duration-150 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] ${priorityClass(part.priority)}`}
                 >
                   {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
                     <div className="h-28 bg-steel-800">
@@ -1400,21 +1416,26 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                 </button>
               ))}
             </div>
-            {!stageItems.length ? <p className="mt-3 text-sm text-steel-300">No parts in this stage right now.</p> : null}
+            {!stageItems.length ? (
+              <div className="flex flex-col items-center gap-1 py-8 text-ink-dim">
+                <Layers className="h-6 w-6 opacity-40" />
+                <p className="text-sm">No parts in this stage right now.</p>
+              </div>
+            ) : null}
           </div>
         ) : selectedPart ? (
           <div
             ref={detailScrollRef}
-            className="relative h-full overflow-y-auto bg-[#242830] lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="relative h-full overflow-y-auto bg-surface-sidebar lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px) + 48px, 64px)" }}
             onTouchStart={onDetailTouchStart}
             onTouchMove={onDetailTouchMove}
             onTouchEnd={onDetailTouchEnd}
           >
             {showCompactDetailHeader && !mobileActive ? (
-              <div className="sticky top-0 z-30 border-y border-[#31465f] bg-[linear-gradient(90deg,rgba(27,40,56,0.94),rgba(38,49,64,0.94),rgba(27,40,56,0.94))] px-5 py-2 backdrop-blur-sm">
+              <div className="sticky top-0 z-30 border-y border-rim bg-[linear-gradient(90deg,rgba(27,40,56,0.94),rgba(38,49,64,0.94),rgba(27,40,56,0.94))] px-5 py-2 backdrop-blur-sm">
               <div className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] items-center gap-3 overflow-hidden max-lg:grid-cols-1">
-                <div className="relative inline-flex h-11 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-[#1a9fff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
+                <div className="relative inline-flex h-11 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-brand-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
                   <span className="pointer-events-none absolute left-3 text-lg font-semibold tracking-wide">
                     {stageLabel(statusToStage(selectedPart.status))}
                   </span>
@@ -1434,18 +1455,18 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
                   >
                     {STAGE_ORDER.map((stage) => (
-                      <option key={stage} value={stage} className="bg-[#1d2633] text-[#d6e4f2]">
+                      <option key={stage} value={stage} className="bg-surface-card text-ink">
                         {stageLabel(stage)}
                       </option>
                     ))}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 text-white" />
                 </div>
-                <div className="flex min-w-0 items-center gap-2 text-[#c7d5e0]">
-                  <div className="h-7 w-7 overflow-hidden rounded-[2px] bg-[#2a475e]">
+                <div className="flex min-w-0 items-center gap-2 text-steel-300">
+                  <div className="h-7 w-7 overflow-hidden rounded-[2px] bg-steel-800">
                     {photoForPart(selectedPart) ? (
                       isVideoStorageKey(photoForPart(selectedPart)) ? (
-                        <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-[#9fb0c2]">V</div>
+                        <div className="flex h-full w-full items-center justify-center bg-[#1b2431] text-[10px] text-ink-muted">V</div>
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={mediaUrlFromStorageKey(photoForPart(selectedPart))} alt={selectedPart.name} className="h-full w-full object-cover" />
@@ -1454,12 +1475,12 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-2xl">{selectedPart.name}</p>
-                    <p className="truncate text-xs text-[#9fb0c2]">{selectedPart.partNumber}</p>
+                    <p className="truncate text-xs text-ink-muted">{selectedPart.partNumber}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => detailScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
-                  className="inline-flex h-9 min-w-[144px] items-center justify-center rounded-[4px] border border-[#435266] bg-[#3a4659] px-3 text-xs font-semibold text-[#c7d5e0] hover:bg-[#4a5970]"
+                  className="inline-flex h-9 min-w-[144px] items-center justify-center rounded-[4px] border border-rim-btn bg-surface-btn px-3 text-xs font-semibold text-steel-300 hover:bg-surface-btn-hover"
                 >
                   Scroll To Top
                 </button>
@@ -1467,7 +1488,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </div>
             ) : null}
 
-            <div className="relative h-[220px] overflow-hidden border-b border-[#31465f] sm:h-[280px] lg:h-[360px]">
+            <div className="relative h-[220px] overflow-hidden border-b border-rim sm:h-[280px] lg:h-[360px]">
               {photoForPart(selectedPart) ? (
                 <>
                   {isVideoStorageKey(photoForPart(selectedPart)) ? (
@@ -1502,16 +1523,16 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_35%,rgba(109,163,217,0.18),transparent_45%),linear-gradient(180deg,rgba(36,40,48,0.15)_15%,rgba(36,40,48,0.72)_68%,rgba(36,40,48,0.94)_100%)]" />
               <div className="absolute bottom-0 left-0 right-0 px-5 pb-6 pt-24">
                 <h2 className="text-6xl font-bold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">{selectedPart.name}</h2>
-                <p className="mt-1 text-base text-[#c7d5e0] drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]">{selectedPart.partNumber}</p>
+                <p className="mt-1 text-base text-steel-300 drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]">{selectedPart.partNumber}</p>
               </div>
             </div>
 
             <div
               ref={installBarRef}
-              className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] border-b border-[#31465f] bg-[linear-gradient(90deg,rgba(24,34,48,0.96),rgba(43,54,71,0.92),rgba(24,34,48,0.96))] backdrop-blur-sm max-lg:grid-cols-1"
+              className="grid grid-cols-[max-content_minmax(0,1fr)_max-content] border-b border-rim bg-[linear-gradient(90deg,rgba(24,34,48,0.96),rgba(43,54,71,0.92),rgba(24,34,48,0.96))] backdrop-blur-sm max-lg:grid-cols-1"
             >
               <div className="m-3 flex items-center gap-2">
-                <div className="relative inline-flex h-12 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-[#1a9fff] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
+                <div className="relative inline-flex h-12 min-w-[156px] items-center rounded-[2px] border border-[#2f6eb6] bg-brand-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
                   <span className="pointer-events-none absolute left-3 text-xl font-semibold tracking-wide">
                     {stageLabel(statusToStage(selectedPart.status))}
                   </span>
@@ -1531,7 +1552,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none"
                   >
                     {STAGE_ORDER.map((stage) => (
-                      <option key={stage} value={stage} className="bg-[#1d2633] text-[#d6e4f2]">
+                      <option key={stage} value={stage} className="bg-surface-card text-ink">
                         {stageLabel(stage)}
                       </option>
                     ))}
@@ -1542,8 +1563,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   onClick={() => setDetailPanel((prev) => (prev === "settings" ? "main" : "settings"))}
                   className={`inline-flex h-12 items-center justify-center gap-2 rounded-[4px] border px-3 lg:hidden ${
                     detailPanel === "settings"
-                      ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#c7e7ff]"
-                      : "border-[#435266] bg-[#3a4659] text-[#c7d5e0] hover:bg-[#4a5970]"
+                      ? "border-rim-brand bg-brand-600/25 text-ink-bright"
+                      : "border-rim-btn bg-surface-btn text-steel-300 hover:bg-surface-btn-hover"
                   }`}
                 >
                   <Settings className="h-5 w-5" />
@@ -1552,44 +1573,44 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               </div>
               <div className="grid grid-cols-2 gap-2 px-2 py-2 text-center lg:grid-cols-4">
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Machinist</p>
-                  <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedPrimaryOwnerName}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-ink-label">Machinist</p>
+                  <p className="whitespace-normal break-words px-2 text-base leading-tight text-ink">{selectedPrimaryOwnerName}</p>
                   {canClaimMachinist ? (
                     <div className="mt-2 px-2">
                       <button
                         type="button"
                         onClick={() => claimMachinistMutation.mutate()}
                         disabled={claimMachinistMutation.isPending}
-                        className="w-full rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-2 py-1 text-xs text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full rounded-[3px] border border-rim-brand bg-brand-600/15 px-2 py-1 text-xs text-ink-link hover:bg-brand-600/25 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {claimMachinistMutation.isPending ? "Claiming..." : "Claim Machinist"}
+                        {claimMachinistMutation.isPending ? <><Spinner size="xs" />Claiming...</> : "Claim Machinist"}
                       </button>
                     </div>
                   ) : null}
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Finisher</p>
-                  <p className="whitespace-normal break-words px-2 text-base leading-tight text-[#d6e4f2]">{selectedFinisherName}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-ink-label">Finisher</p>
+                  <p className="whitespace-normal break-words px-2 text-base leading-tight text-ink">{selectedFinisherName}</p>
                   {canClaimFinisher ? (
                     <div className="mt-2 px-2">
                       <button
                         type="button"
                         onClick={() => claimFinisherMutation.mutate()}
                         disabled={claimFinisherMutation.isPending}
-                        className="w-full rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-2 py-1 text-xs text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full rounded-[3px] border border-rim-brand bg-brand-600/15 px-2 py-1 text-xs text-ink-link hover:bg-brand-600/25 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {claimFinisherMutation.isPending ? "Claiming..." : "Claim Finisher"}
+                        {claimFinisherMutation.isPending ? <><Spinner size="xs" />Claiming...</> : "Claim Finisher"}
                       </button>
                     </div>
                   ) : null}
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Copies</p>
-                  <p className="text-base text-[#d6e4f2]">{selectedPart.quantityComplete}/{selectedPart.quantityRequired}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-ink-label">Copies</p>
+                  <p className="text-base text-ink">{selectedPart.quantityComplete}/{selectedPart.quantityRequired}</p>
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-[#9aa8b8]">Due Date</p>
-                  <p className="text-base text-[#d6e4f2]">Not set</p>
+                  <p className="text-[10px] uppercase tracking-wide text-ink-label">Due Date</p>
+                  <p className="text-base text-ink">Not set</p>
                 </div>
               </div>
               <div className="mr-4 hidden items-center gap-2 lg:flex">
@@ -1597,8 +1618,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   onClick={() => setDetailPanel((prev) => (prev === "settings" ? "main" : "settings"))}
                   className={`inline-flex h-9 w-[124px] items-center justify-center gap-2 rounded-[4px] border px-2 ${
                     detailPanel === "settings"
-                      ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#c7e7ff]"
-                      : "border-[#435266] bg-[#3a4659] text-[#c7d5e0] hover:bg-[#4a5970]"
+                      ? "border-rim-brand bg-brand-600/25 text-ink-bright"
+                      : "border-rim-btn bg-surface-btn text-steel-300 hover:bg-surface-btn-hover"
                   }`}
                 >
                   <Settings className="h-5 w-5" />
@@ -1606,21 +1627,21 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                 </button>
               </div>
             </div>
-            {!canEditSelectedPart ? <p className="px-4 py-2 text-xs text-[#9fb0c2]">{readOnlyReason}</p> : null}
+            {!canEditSelectedPart ? <p className="px-4 py-2 text-xs text-ink-muted">{readOnlyReason}</p> : null}
 
             {detailPanel === "main" ? (
               <div className="space-y-5 bg-[radial-gradient(circle_at_20%_20%,rgba(97,132,170,0.15),transparent_50%)] p-4">
-                <div className="rounded-[3px] border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                      <h4 className="text-2xl font-semibold text-[#d6e4f2]">Quantity Tracking</h4>
-                      <p className="mt-2 text-lg text-[#9fb0c2]">
+                <div className="rounded-[3px] border border-rim bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
+                      <h4 className="text-2xl font-semibold text-ink">Quantity Tracking</h4>
+                      <p className="mt-2 text-lg text-ink-muted">
                         Completed {selectedPart.quantityComplete}/{selectedPart.quantityRequired}
                       </p>
-                      <p className="text-sm text-[#9fb0c2]">
+                      <p className="text-sm text-ink-muted">
                         Remaining: {Math.max(0, selectedPart.quantityRequired - selectedPart.quantityComplete)}
                       </p>
                       <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#1c2635]">
                         <div
-                          className="h-full bg-[#1a9fff]"
+                          className="h-full bg-brand-600"
                           style={{
                             width: `${Math.min(
                               100,
@@ -1638,7 +1659,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                             quickQtyMutation.mutate(Math.max(0, selectedPart.quantityComplete - 1))
                           }
                           disabled={!canEditSelectedPart || quickQtyMutation.isPending}
-                          className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-2 py-1 text-[#c7d5e0] hover:bg-[#243244] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-[3px] border border-rim bg-surface-card px-2 py-1 text-steel-300 hover:bg-[#243244] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           -1
                         </button>
@@ -1650,16 +1671,16 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                             )
                           }
                           disabled={!canEditSelectedPart || quickQtyMutation.isPending}
-                          className="rounded-[3px] border border-[#31465f] bg-[#1d2633] px-2 py-1 text-[#c7d5e0] hover:bg-[#243244] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-[3px] border border-rim bg-surface-card px-2 py-1 text-steel-300 hover:bg-[#243244] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           +1
                         </button>
                       </div>
                     </div>
 
-                <div className="rounded-[3px] border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
-                  <h3 className="text-2xl font-semibold text-[#d6e4f2]">Photos</h3>
-                  <p className="mt-1 text-sm text-[#9fb0c2]">Upload images or videos. Set thumbnail in Settings.</p>
+                <div className="rounded-[3px] border border-rim bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
+                  <h3 className="text-2xl font-semibold text-ink">Photos</h3>
+                  <p className="mt-1 text-sm text-ink-muted">Upload images or videos. Set thumbnail in Settings.</p>
                   <input
                     ref={uploadInputRef}
                     type="file"
@@ -1676,13 +1697,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     type="button"
                     onClick={() => uploadInputRef.current?.click()}
                     disabled={!canEditSelectedPart || uploadPhotoMutation.isPending}
-                    className="mt-3 rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-3 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-3 rounded-[3px] border border-rim-brand bg-brand-600/15 px-3 py-2 text-sm text-ink-link hover:bg-brand-600/25 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {uploadPhotoMutation.isPending ? "Uploading..." : "Upload Photo/Video"}
+                    {uploadPhotoMutation.isPending ? <><Spinner size="xs" />Uploading...</> : "Upload Photo/Video"}
                   </button>
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                     {detailPhotos.map((photo) => (
-                      <div key={photo.id} className="rounded-[3px] border border-[#31465f] bg-[#1d2633] p-1">
+                      <div key={photo.id} className="rounded-[3px] border border-rim bg-surface-card p-1">
                         {isVideoPhoto(photo) ? (
                           <button type="button" onClick={() => openMediaPreview(photo)} className="w-full">
                             <video
@@ -1705,23 +1726,31 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       </div>
                     ))}
                   </div>
-                  {!detailPhotos.length ? <p className="mt-2 text-xs text-[#9fb0c2]">No media uploaded yet.</p> : null}
+                  {!detailPhotos.length ? (
+                    <div className="flex flex-col items-center gap-1 py-5 text-ink-dim">
+                      <ImageIcon className="h-6 w-6 opacity-40" />
+                      <p className="text-xs">No media uploaded yet.</p>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="rounded-[3px] border border-[#31465f] bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
-                  <h3 className="text-2xl font-semibold text-[#d6e4f2]">Notes</h3>
-                  <div className="mt-3 max-h-56 space-y-2 overflow-y-auto rounded-[3px] border border-[#31465f] bg-[#1a2230] p-3">
+                <div className="rounded-[3px] border border-rim bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
+                  <h3 className="text-2xl font-semibold text-ink">Notes</h3>
+                  <div className="mt-3 max-h-56 space-y-2 overflow-y-auto rounded-[3px] border border-rim bg-[#1a2230] p-3">
                     {noteMessages.length ? (
                       noteMessages.map((message) => (
                         <div key={message.id} className="rounded-[3px] border border-[#374b64] bg-[#202c3c] px-3 py-2">
-                          <p className="text-xs uppercase tracking-wide text-[#8ea6bc]">
+                          <p className="text-xs uppercase tracking-wide text-ink-label">
                             {new Date(message.createdAt).toLocaleString()}
                           </p>
-                          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#d6e4f2]">{message.text}</p>
+                          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{message.text}</p>
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-[#9fb0c2]">No notes yet.</p>
+                      <div className="flex flex-col items-center gap-1 py-4 text-ink-dim">
+                        <StickyNote className="h-5 w-5 opacity-40" />
+                        <p className="text-sm">No notes yet.</p>
+                      </div>
                     )}
                   </div>
                   <div className="mt-3 flex gap-2">
@@ -1729,12 +1758,12 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       value={noteInput}
                       onChange={(event) => setNoteInput(event.target.value)}
                       placeholder="Add a note..."
-                      className="min-h-[72px] flex-1 resize-y rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2 text-sm text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
+                      className="min-h-[72px] flex-1 resize-y rounded-[3px] border border-rim bg-surface-card px-3 py-2 text-sm text-ink outline-none focus:border-rim-brand"
                     />
                     <button
                       type="button"
                       onClick={postNoteMessage}
-                      className="h-fit rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-3 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25"
+                      className="h-fit rounded-[3px] border border-rim-brand bg-brand-600/15 px-3 py-2 text-sm text-ink-link hover:bg-brand-600/25"
                     >
                       Add Note
                     </button>
@@ -1744,73 +1773,73 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             ) : (
               <div className="space-y-4 bg-[radial-gradient(circle_at_20%_20%,rgba(97,132,170,0.15),transparent_50%)] p-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-semibold text-[#d6e4f2]">Part Settings</h3>
+                  <h3 className="text-2xl font-semibold text-ink">Part Settings</h3>
                   <button
                     type="button"
                     onClick={() => setDetailPanel("main")}
-                    className="rounded-[3px] border border-[#435266] bg-[#3a4659] px-3 py-1 text-sm text-[#c7d5e0] hover:bg-[#4a5970]"
+                    className="rounded-[3px] border border-rim-btn bg-surface-btn px-3 py-1 text-sm text-steel-300 hover:bg-surface-btn-hover"
                   >
                     Back to Detail
                   </button>
                 </div>
                 <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Identity</p>
-                    <label className="mt-2 block text-xs text-[#9aa8b8]">Name</label>
+                  <div className="border border-rim bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
+                    <p className="text-sm uppercase tracking-wide text-ink-label">Identity</p>
+                    <label className="mt-2 block text-xs text-ink-label">Name</label>
                     <input
                       value={editName}
                       onChange={(event) => setEditName(event.target.value)}
                       disabled={!canEditSelectedPart}
-                      className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
+                      className="mt-1 h-10 w-full rounded-[3px] border border-rim bg-surface-card px-3 text-ink outline-none focus:border-rim-brand"
                     />
-                    <label className="mt-3 block text-xs text-[#9aa8b8]">Part Number</label>
+                    <label className="mt-3 block text-xs text-ink-label">Part Number</label>
                     <input
                       value={editPartNumber}
                       onChange={(event) => setEditPartNumber(event.target.value)}
                       disabled={!canEditSelectedPart}
-                      className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
+                      className="mt-1 h-10 w-full rounded-[3px] border border-rim bg-surface-card px-3 text-ink outline-none focus:border-rim-brand"
                     />
-                    <label className="mt-3 block text-xs text-[#9aa8b8]">Priority</label>
+                    <label className="mt-3 block text-xs text-ink-label">Priority</label>
                     <select
                       value={priorityTier(editPriority)}
                       onChange={(event) =>
                         setEditPriority(event.target.value === "ASAP" ? 1 : event.target.value === "NORMAL" ? 3 : 5)
                       }
                       disabled={!canEditSelectedPart}
-                      className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
+                      className="mt-1 h-10 w-full rounded-[3px] border border-rim bg-surface-card px-3 text-ink outline-none focus:border-rim-brand"
                     >
                       <option value="ASAP">ASAP</option>
                       <option value="NORMAL">Normal</option>
                       <option value="BACKBURNER">Backburner</option>
                     </select>
                   </div>
-                  <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Roles</p>
-                    <p className="mt-2 text-lg text-[#d6e4f2]">Machinist: {selectedPrimaryOwnerName}</p>
-                    <p className="text-base text-[#9fb0c2]">Finisher(s): {selectedCollaboratorLabel}</p>
+                  <div className="border border-rim bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
+                    <p className="text-sm uppercase tracking-wide text-ink-label">Roles</p>
+                    <p className="mt-2 text-lg text-ink">Machinist: {selectedPrimaryOwnerName}</p>
+                    <p className="text-base text-ink-muted">Finisher(s): {selectedCollaboratorLabel}</p>
                   </div>
-                  <div className="border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Quantity</p>
-                    <label className="mt-2 block text-xs text-[#9aa8b8]">Required</label>
+                  <div className="border border-rim bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
+                    <p className="text-sm uppercase tracking-wide text-ink-label">Quantity</p>
+                    <label className="mt-2 block text-xs text-ink-label">Required</label>
                     <input
                       value={editQtyRequired}
                       onChange={(event) => setEditQtyRequired(event.target.value.replace(/\D/g, ""))}
                       disabled={!canEditSelectedPart}
-                      className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
+                      className="mt-1 h-10 w-full rounded-[3px] border border-rim bg-surface-card px-3 text-ink outline-none focus:border-rim-brand"
                       inputMode="numeric"
                     />
-                    <label className="mt-3 block text-xs text-[#9aa8b8]">Completed</label>
+                    <label className="mt-3 block text-xs text-ink-label">Completed</label>
                     <input
                       value={editQtyComplete}
                       onChange={(event) => setEditQtyComplete(event.target.value.replace(/\D/g, ""))}
                       disabled={!canEditSelectedPart}
-                      className="mt-1 h-10 w-full rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 text-[#d6e4f2] outline-none focus:border-[#1a9fff]"
+                      className="mt-1 h-10 w-full rounded-[3px] border border-rim bg-surface-card px-3 text-ink outline-none focus:border-rim-brand"
                       inputMode="numeric"
                     />
                   </div>
-                  <div className="xl:col-span-2 border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
-                    <p className="text-sm uppercase tracking-wide text-[#9aa8b8]">Photos</p>
-                    <p className="mt-1 text-xs text-[#9fb0c2]">Pick which image is used as the part thumbnail.</p>
+                  <div className="xl:col-span-2 border border-rim bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
+                    <p className="text-sm uppercase tracking-wide text-ink-label">Photos</p>
+                    <p className="mt-1 text-xs text-ink-muted">Pick which image is used as the part thumbnail.</p>
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                       {detailPhotos.map((photo) => {
                         const active = photoForPart(selectedPart) === photo.storageKey;
@@ -1818,7 +1847,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                           <div
                             key={photo.id}
                             className={`rounded-[3px] border p-1 ${
-                              active ? "border-[#1a9fff] bg-[#1a9fff]/15" : "border-[#31465f] bg-[#1d2633]"
+                              active ? "border-rim-brand bg-brand-600/15" : "border-rim bg-surface-card"
                             }`}
                           >
                             {isVideoPhoto(photo) ? (
@@ -1846,8 +1875,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                               disabled={!canEditSelectedPart}
                               className={`mt-1 w-full rounded-[2px] border px-2 py-1 text-xs ${
                                 active
-                                  ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#d7efff]"
-                                  : "border-[#435266] bg-[#3a4659] text-[#c7d5e0] hover:bg-[#4a5970]"
+                                  ? "border-rim-brand bg-brand-600/25 text-ink-bright"
+                                  : "border-rim-btn bg-surface-btn text-steel-300 hover:bg-surface-btn-hover"
                               }`}
                             >
                               {active ? "Thumbnail" : "Set Thumbnail"}
@@ -1857,7 +1886,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                       })}
                     </div>
                     {!detailPhotos.length ? (
-                      <p className="mt-2 text-xs text-[#9fb0c2]">No photos uploaded yet.</p>
+                      <div className="flex flex-col items-center gap-1 py-5 text-ink-dim">
+                        <ImageIcon className="h-5 w-5 opacity-40" />
+                        <p className="text-xs">No photos uploaded yet.</p>
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -1866,9 +1898,9 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     type="button"
                     onClick={() => settingsMutation.mutate()}
                     disabled={!canEditSelectedPart || settingsMutation.isPending}
-                    className="inline-flex rounded-[3px] border border-[#1a9fff] bg-[#1a9fff]/15 px-4 py-2 text-sm text-[#7cc5ff] hover:bg-[#1a9fff]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex rounded-[3px] border border-rim-brand bg-brand-600/15 px-4 py-2 text-sm text-ink-link hover:bg-brand-600/25 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {settingsMutation.isPending ? "Saving..." : "Save Settings"}
+                    {settingsMutation.isPending ? <><Spinner size="xs" />Saving...</> : "Save Settings"}
                   </button>
                 </div>
               </div>
@@ -1889,7 +1921,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
               <button
                 type="button"
                 onClick={() => setPreviewMedia(null)}
-                className="absolute right-2 top-2 z-10 rounded-[3px] border border-[#435266] bg-[#2a3748] p-1 text-[#c7d5e0] hover:bg-[#3a495e]"
+                className="absolute right-2 top-2 z-10 rounded-[3px] border border-rim-btn bg-[#2a3748] p-1 text-steel-300 hover:bg-[#3a495e]"
               >
                 <X className="h-4 w-4" />
               </button>

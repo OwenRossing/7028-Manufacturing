@@ -98,7 +98,7 @@ export function AdminUsersPanel() {
   }
 
   return (
-    <div className="space-y-3 rounded-[3px] border border-[#31465f] bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
+    <div className="space-y-3 rounded-[3px] border border-rim bg-[linear-gradient(135deg,rgba(59,76,99,0.45),rgba(34,44,58,0.88))] p-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-white">Team Accounts</h2>
@@ -107,21 +107,21 @@ export function AdminUsersPanel() {
         <button
           type="button"
           onClick={() => { setShowCreate((v) => !v); setCreateError(null); }}
-          className="rounded-[3px] border border-[#2f6eb6] bg-[#1a9fff]/20 px-3 py-1 text-xs text-[#d7efff] hover:bg-[#1a9fff]/40"
+          className="rounded-[3px] border border-[#2f6eb6] bg-brand-600/20 px-3 py-1 text-xs text-ink-bright hover:bg-brand-600/40"
         >
           {showCreate ? "Cancel" : "+ Add User"}
         </button>
       </div>
 
       {showCreate ? (
-        <form onSubmit={submitCreate} className="space-y-2 rounded-[3px] border border-[#31465f] bg-[#1d2633] p-3">
+        <form onSubmit={submitCreate} className="space-y-2 rounded-[3px] border border-rim bg-surface-card p-3">
           <input
             type="text"
             placeholder="Display name"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             required
-            className="w-full rounded border border-[#3b4c63] bg-[#151e29] px-3 py-1.5 text-sm text-[#d6e4f2] placeholder-[#5a7a99] outline-none focus:border-[#5a8ab5]"
+            className="w-full rounded border border-rim-soft bg-[#151e29] px-3 py-1.5 text-sm text-ink placeholder-ink-dim outline-none focus:border-rim-brand"
           />
           <input
             type="email"
@@ -129,13 +129,13 @@ export function AdminUsersPanel() {
             value={newEmail}
             onChange={(e) => setNewEmail(e.target.value)}
             required
-            className="w-full rounded border border-[#3b4c63] bg-[#151e29] px-3 py-1.5 text-sm text-[#d6e4f2] placeholder-[#5a7a99] outline-none focus:border-[#5a8ab5]"
+            className="w-full rounded border border-rim-soft bg-[#151e29] px-3 py-1.5 text-sm text-ink placeholder-ink-dim outline-none focus:border-rim-brand"
           />
           {createError ? <p className="text-xs text-red-400">{createError}</p> : null}
           <button
             type="submit"
             disabled={createMutation.isPending || !newName.trim() || !newEmail.trim()}
-            className="w-full rounded bg-[#2563eb] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {createMutation.isPending ? "Creating..." : "Create User"}
           </button>
@@ -147,10 +147,10 @@ export function AdminUsersPanel() {
 
       <div className="space-y-2">
         {(query.data?.items ?? []).map((user) => (
-          <div key={user.id} className="flex items-center justify-between gap-2 rounded-[3px] border border-[#31465f] bg-[#1d2633] px-3 py-2">
+          <div key={user.id} className="flex items-center justify-between gap-2 rounded-[3px] border border-rim bg-surface-card px-3 py-2">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm text-[#d6e4f2]">{user.displayName}</p>
-              <p className="truncate text-xs text-[#9fb0c2]">{user.email}</p>
+              <p className="truncate text-sm text-ink">{user.displayName}</p>
+              <p className="truncate text-xs text-ink-muted">{user.email}</p>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -159,8 +159,8 @@ export function AdminUsersPanel() {
                 onClick={() => toggleMutation.mutate({ userId: user.id, isAdmin: !user.isAdmin })}
                 className={`rounded-[3px] border px-2 py-1 text-xs ${
                   user.isAdmin
-                    ? "border-[#1a9fff] bg-[#1a9fff]/25 text-[#d7efff]"
-                    : "border-[#435266] bg-[#3a4659] text-[#c7d5e0]"
+                    ? "border-rim-brand bg-brand-600/25 text-ink-bright"
+                    : "border-rim-btn bg-surface-btn text-steel-300"
                 } disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 {user.isSelf ? "You" : user.isAdmin ? "Admin" : "User"}

@@ -28,8 +28,8 @@ export function AppShell({
   const hideChrome = pathname.startsWith("/login");
   const isWorkspacePath = pathname === "/" || pathname.startsWith("/parts") || pathname.startsWith("/import");
   const shellClassName = isWorkspacePath
-    ? "fixed inset-0 flex overflow-hidden bg-[#1b2838] text-white"
-    : "min-h-screen bg-[#1b2838] text-white";
+    ? "fixed inset-0 flex overflow-hidden bg-steel-850 text-white"
+    : "min-h-screen bg-steel-850 text-white";
   const shellInnerClassName = isWorkspacePath ? "flex w-full min-h-0 flex-1 flex-col" : "w-full";
   const mainClassName = hideChrome
     ? "w-full"
