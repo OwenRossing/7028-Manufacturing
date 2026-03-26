@@ -34,11 +34,12 @@ type User = { id: string; displayName: string; email: string };
 
 type Props = {
   googleClientId: string | null;
+  googleAuthDomain: string | null;
   demoMode: boolean;
   localMode: boolean;
 };
 
-export default function LoginClient({ googleClientId, demoMode, localMode }: Props) {
+export default function LoginClient({ googleClientId, googleAuthDomain, demoMode, localMode }: Props) {
   const router = useRouter();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -240,7 +241,7 @@ export default function LoginClient({ googleClientId, demoMode, localMode }: Pro
           <p className="text-sm text-steel-300">Demo mode is enabled. Pick a demo account or use Google sign-in.</p>
         ) : (
           <p className="text-sm text-steel-300">
-            Continue with Google. Only <span className="font-semibold">@stmarobotics.org</span> accounts are allowed.
+            Continue with your Google account.{googleAuthDomain ? <> Only <span className="font-semibold">@{googleAuthDomain}</span> accounts are allowed.</> : null}
           </p>
         )}
         {demoMode ? (

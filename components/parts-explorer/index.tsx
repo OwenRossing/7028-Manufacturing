@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search, ChevronDown, X, Settings, ImageIcon, StickyNote, Trophy, Layers } from "lucide-react";
+import { Search, ChevronDown, X, Settings, ImageIcon, Trophy, Layers } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   canonicalStatusForStage,
@@ -31,11 +31,6 @@ type MeResponse = {
   isAdmin: boolean;
 };
 
-type NoteMessage = {
-  id: string;
-  text: string;
-  createdAt: string;
-};
 type DetailPhoto = {
   id: string;
   storageKey: string;
@@ -71,16 +66,16 @@ function priorityTier(priority: number): PriorityTier {
 
 function priorityClass(priority: number): string {
   const tier = priorityTier(priority);
-  if (tier === "ASAP")       return "border-red-500     bg-red-500/25";
-  if (tier === "NORMAL")     return "border-emerald-500 bg-emerald-500/20";
-  return                            "border-slate-500/60 bg-slate-600/20";
+  if (tier === "ASAP")       return "border-red-500    bg-red-500/25";
+  if (tier === "NORMAL")     return "border-yellow-500 bg-yellow-500/20";
+  return                            "border-blue-500/60 bg-blue-500/20";
 }
 
 function priorityNameClass(priority: number): string {
   const tier = priorityTier(priority);
   if (tier === "ASAP")   return "text-red-400";
-  if (tier === "NORMAL") return "text-emerald-400";
-  return                        "text-slate-400";
+  if (tier === "NORMAL") return "text-yellow-400";
+  return                        "text-blue-400";
 }
 
 function matchesSearch(part: PartListItem, search: string): boolean {
@@ -175,6 +170,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   });
   const [subsystemFilters, setSubsystemFilters] = useState<Record<string, boolean>>({});
   const [onlyMine, setOnlyMine] = useState(false);
+  const [groupBy, setGroupBy] = useState<"status" | "priority" | "student">("status");
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [showCompactDetailHeader, setShowCompactDetailHeader] = useState(false);
   const [detailPanel, setDetailPanel] = useState<"main" | "settings">("main");
   const [editName, setEditName] = useState("");
@@ -182,8 +179,6 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const [editPriority, setEditPriority] = useState(3);
   const [editQtyRequired, setEditQtyRequired] = useState("1");
   const [editQtyComplete, setEditQtyComplete] = useState("0");
-  const [noteInput, setNoteInput] = useState("");
-  const [noteMessages, setNoteMessages] = useState<NoteMessage[]>([]);
   const [feedback, setFeedback] = useState<{ kind: "error" | "warning"; text: string } | null>(null);
   const [detailPhotos, setDetailPhotos] = useState<DetailPhoto[]>([]);
   const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null);
@@ -344,7 +339,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       setView("OVERVIEW");
       return;
     }
-    if (activeTab === "board") {
+    if (activeTab === "todo") {
       setView("HOME");
       return;
     }
@@ -354,13 +349,13 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   useEffect(() => {
     if (activeTab || partIdFromQuery) return;
     const nextParams = new URLSearchParams(paramsString);
-    nextParams.set("tab", "board");
+    nextParams.set("tab", "todo");
     const nextHref = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
     router.replace(nextHref, { scroll: false });
   }, [activeTab, paramsString, partIdFromQuery, pathname, router]);
 
   useEffect(() => {
-    if (activeTab === "overview" || activeTab === "community" || activeTab === "board") return;
+    if (activeTab === "overview" || activeTab === "community" || activeTab === "todo") return;
     if (partIdFromQuery || (mobileActive && view === "DETAIL" && Boolean(selectedPartId))) {
       setView("DETAIL");
       return;
@@ -447,26 +442,6 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     setEditQtyRequired(String(selectedPart.quantityRequired));
     setEditQtyComplete(String(selectedPart.quantityComplete));
   }, [selectedPart]);
-
-  useEffect(() => {
-    if (!selectedPartId) {
-      setNoteMessages([]);
-      return;
-    }
-    try {
-      const raw =
-        window.localStorage.getItem(`part-notes-${selectedPartId}`) ??
-        window.localStorage.getItem(`part-discussion-${selectedPartId}`);
-      if (!raw) {
-        setNoteMessages([]);
-        return;
-      }
-      const parsed = JSON.parse(raw) as NoteMessage[];
-      setNoteMessages(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setNoteMessages([]);
-    }
-  }, [selectedPartId]);
 
   const moveMutation = useMutation({
     mutationFn: async ({ partId, toStatus }: { partId: string; toStatus: PartStatus }) => {
@@ -750,21 +725,6 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     setView(fallbackView);
   }
 
-  function postNoteMessage() {
-    if (!selectedPartId) return;
-    const text = noteInput.trim();
-    if (!text) return;
-    const message: NoteMessage = { id: generateUUID(), text, createdAt: new Date().toISOString() };
-    const next = [...noteMessages, message];
-    setNoteMessages(next);
-    setNoteInput("");
-    try {
-      window.localStorage.setItem(`part-notes-${selectedPartId}`, JSON.stringify(next));
-    } catch {
-      setFeedback({ kind: "warning", text: "Note added for this session only." });
-    }
-  }
-
   const byStage = useMemo(() => {
     const grouped: Record<WorkflowStage, PartListItem[]> = {
       UNASSIGNED: [],
@@ -780,37 +740,96 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
 
   type SidebarRow =
     | { type: "stage-header"; stage: WorkflowStage }
+    | { type: "group-header"; label: string; key: string }
     | { type: "part-row"; part: PartListItem };
 
   const sidebarFlatRows = useMemo<SidebarRow[]>(() => {
     const rows: SidebarRow[] = [];
-    for (const stage of ([...STAGE_ORDER].sort((a, b) => stageCollectionSort(a) - stageCollectionSort(b)) as WorkflowStage[])) {
-      rows.push({ type: "stage-header", stage });
-      if (stageOpen[stage]) {
-        for (const part of byStage[stage]) {
+    if (groupBy === "status") {
+      for (const stage of ([...STAGE_ORDER].sort((a, b) => stageCollectionSort(a) - stageCollectionSort(b)) as WorkflowStage[])) {
+        rows.push({ type: "stage-header", stage });
+        if (stageOpen[stage]) {
+          for (const part of byStage[stage]) {
+            rows.push({ type: "part-row", part });
+          }
+        }
+      }
+    } else if (groupBy === "priority") {
+      const tiers: PriorityTier[] = ["ASAP", "NORMAL", "BACKBURNER"];
+      for (const tier of tiers) {
+        const tierParts = sorted.filter((part) => priorityTier(part.priority) === tier);
+        rows.push({ type: "group-header", label: tier === "NORMAL" ? "Normal" : tier === "BACKBURNER" ? "Backburner" : "ASAP", key: tier });
+        for (const part of tierParts) {
+          rows.push({ type: "part-row", part });
+        }
+      }
+    } else {
+      // group by student (PRIMARY owner)
+      const studentMap = new Map<string, PartListItem[]>();
+      for (const part of sorted) {
+        const name = part.owners.find((o) => o.role === "PRIMARY")?.user.displayName ?? "Unassigned";
+        const existing = studentMap.get(name) ?? [];
+        existing.push(part);
+        studentMap.set(name, existing);
+      }
+      const studentsSorted = Array.from(studentMap.keys()).sort((a, b) => {
+        if (a === "Unassigned") return 1;
+        if (b === "Unassigned") return -1;
+        return a.localeCompare(b);
+      });
+      for (const student of studentsSorted) {
+        rows.push({ type: "group-header", label: student, key: student });
+        for (const part of studentMap.get(student) ?? []) {
           rows.push({ type: "part-row", part });
         }
       }
     }
     return rows;
-  }, [byStage, stageOpen]);
+  }, [byStage, stageOpen, groupBy, sorted]);
 
   const sidebarVirtualizer = useVirtualizer({
     count: sidebarFlatRows.length,
     getScrollElement: () => sidebarScrollRef.current,
-    estimateSize: (i) => (sidebarFlatRows[i]?.type === "stage-header" ? 24 : 44),
+    estimateSize: (i) => {
+      const row = sidebarFlatRows[i];
+      return row?.type === "stage-header" || row?.type === "group-header" ? 24 : 52;
+    },
     overscan: 8
   });
 
-  const mostImportant = sorted.slice(0, 3);
-  const myParts = (currentUserId
-    ? sorted.filter((part) => part.owners.some((owner) => owner.userId === currentUserId))
-    : sorted
-  ).slice(0, 10);
+  const mostImportant = sorted.filter((p) => stageForItem(p) !== "COMPLETED").slice(0, 3);
+  // Parts where it is currently this user's turn to act
+  const myActiveParts = useMemo(() => {
+    if (!currentUserId) return sorted.filter((p) => stageForItem(p) !== "COMPLETED").slice(0, 10);
+    return sorted.filter((part) => {
+      const stage = stageForItem(part);
+      if (stage === "COMPLETED") return false;
+      const isPrimary = part.owners.some((o) => o.role === "PRIMARY" && o.userId === currentUserId);
+      const isCollaborator = part.owners.some((o) => o.role === "COLLABORATOR" && o.userId === currentUserId);
+      // Machinist's turn: part is in ASSIGNED stage and they are PRIMARY
+      if (isPrimary && stage === "ASSIGNED") return true;
+      // Finisher's turn: part is in MACHINED stage and they are COLLABORATOR
+      if (isCollaborator && stage === "MACHINED") return true;
+      return false;
+    });
+  }, [sorted, currentUserId]);
+  // Parts queued for the user but waiting on a prior step
+  const myWaitingParts = useMemo(() => {
+    if (!currentUserId) return [];
+    return sorted.filter((part) => {
+      const stage = stageForItem(part);
+      if (stage === "COMPLETED" || stage === "UNASSIGNED") return false;
+      const isCollaborator = part.owners.some((o) => o.role === "COLLABORATOR" && o.userId === currentUserId);
+      // Finisher is waiting: part assigned to them but machinist hasn't finished yet
+      if (isCollaborator && stage === "ASSIGNED") return true;
+      return false;
+    });
+  }, [sorted, currentUserId]);
+  const myParts = myActiveParts.slice(0, 10);
 
   const stageItems = useMemo(() => sorted.filter((part) => stageForItem(part) === activeStage), [sorted, activeStage]);
   const mobileDetailOpen = mobileActive && view === "DETAIL" && Boolean(selectedPartId);
-  const mobileBoardMode = mobileActive && activeTab === "board";
+  const mobileBoardMode = mobileActive && activeTab === "todo";
   const mobileBoardDetailLayer = mobileBoardMode;
   const mobileListMenuOpen = mobileBoardMode && view === "HOME" && !mobileDetailOpen;
   const communityLeaderboard = useMemo(() => {
@@ -1031,6 +1050,31 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             ) : null}
           </div>
 
+          <div className="relative mb-2">
+            <button
+              type="button"
+              onClick={() => setGroupMenuOpen((prev) => !prev)}
+              className="inline-flex h-11 w-full items-center justify-between rounded-[3px] bg-surface-nav px-3 text-left text-[15px] font-normal text-steel-300"
+            >
+              <span>Group: {groupBy === "status" ? "Status" : groupBy === "priority" ? "Priority" : "Student"}</span>
+              <ChevronDown className="h-4 w-4 text-ink-dim" />
+            </button>
+            {groupMenuOpen ? (
+              <div className="absolute left-0 top-full z-[70] mt-1 w-full border border-[#5a6473] bg-[#3d4a5d] p-2 text-sm text-steel-300">
+                {(["status", "priority", "student"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => { setGroupBy(opt); setGroupMenuOpen(false); }}
+                    className={`block w-full rounded-[2px] px-3 py-2 text-left hover:bg-[#4a5a6e] ${groupBy === opt ? "text-ink-bright font-semibold" : ""}`}
+                  >
+                    {opt === "status" ? "Status" : opt === "priority" ? "Priority" : "Student"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <div className="mb-2 flex h-11 items-center rounded-[3px] bg-surface-nav px-3">
             <div className={`flex h-9 w-full items-center gap-2 rounded-[3px] px-2 ${
               leftSearchFocused
@@ -1058,7 +1102,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             </div>
           </div>
           <div className="px-1 pb-1 text-[11px] text-ink-dim">
-            Priority colors: <span className="text-red-400">ASAP</span>, <span className="text-emerald-400">Normal</span>, <span className="text-slate-400">Backburner</span>
+            Priority colors: <span className="text-red-400">ASAP</span>, <span className="text-yellow-400">Normal</span>, <span className="text-blue-400">Backburner</span>
           </div>
           {onlyMine && !currentUserId ? (
             <p className="mx-1 rounded-[3px] border border-yellow-500/40 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-200">
@@ -1121,6 +1165,10 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                         </div>
                       );
                     })()
+                  ) : row.type === "group-header" ? (
+                    <div className="border-t border-[#223548] bg-gradient-to-r from-[#243850]/30 via-[#1f3046]/42 to-[#24282f] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-dim">
+                      {row.label}
+                    </div>
                   ) : (
                     (() => {
                       const { part } = row;
@@ -1153,8 +1201,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                             ) : null}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <span className={`line-clamp-1 block text-[15px] leading-tight ${priorityNameClass(part.priority)}`}>{part.name}</span>
+                            <span className={`line-clamp-1 block text-[15px] leading-tight ${stageForItem(part) === "COMPLETED" ? "text-green-400" : priorityNameClass(part.priority)}`}>{part.name}</span>
                             <span className="line-clamp-1 block text-[11px] text-ink-dim">{part.partNumber}</span>
+                            <span className="line-clamp-1 block text-[10px] text-ink-muted">
+                              {part.owners.find((o) => o.role === "PRIMARY")?.user.displayName ?? "Unassigned"}
+                            </span>
                           </div>
                           <span className="rounded-full border border-white/20 bg-black/35 px-2 py-0.5 text-[10px] text-ink">
                             {part.quantityComplete}/{part.quantityRequired}
@@ -1224,13 +1275,11 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             <section>
               <h2 className="mb-2 text-3xl font-semibold text-steel-100">Most Important</h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                  {mostImportant.map((part) => (
+                {mostImportant.map((part) => (
                   <button
                     key={part.id}
                     type="button"
-                    onClick={() => {
-                      openPartDetail(part.id);
-                    }}
+                    onClick={() => openPartDetail(part.id)}
                     className={`relative h-[184px] overflow-hidden border text-left transition-all duration-150 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] ${priorityClass(part.priority)}`}
                   >
                     {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
@@ -1257,15 +1306,14 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
             </section>
 
             <section>
-              <h3 className="mb-2 text-3xl font-semibold text-steel-100">My Parts</h3>
+              <h3 className="mb-1 text-3xl font-semibold text-steel-100">My TODO</h3>
+              <p className="mb-2 text-xs text-ink-dim">Parts where it&apos;s your turn to act.</p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                {myParts.map((part) => (
+                {myActiveParts.map((part) => (
                   <button
                     key={part.id}
                     type="button"
-                    onClick={() => {
-                      openPartDetail(part.id);
-                    }}
+                    onClick={() => openPartDetail(part.id)}
                     className={`relative h-[184px] overflow-hidden border text-left transition-all duration-150 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98] ${priorityClass(part.priority)}`}
                   >
                     {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
@@ -1277,19 +1325,49 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                     <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.86))] p-2">
                       <p className="line-clamp-1 text-sm font-semibold text-white">{part.name}</p>
                       <p className="line-clamp-1 text-xs text-steel-300">{part.partNumber}</p>
-                      <p className="line-clamp-1 text-xs text-steel-300">{crewSummary(part)}</p>
+                      <p className="line-clamp-1 text-xs text-yellow-300">{stageLabel(stageForItem(part))}</p>
                       <p className="text-xs text-steel-200">Qty {part.quantityComplete}/{part.quantityRequired}</p>
                     </div>
                   </button>
                 ))}
               </div>
-              {!myParts.length ? (
+              {!myActiveParts.length ? (
                 <div className="flex flex-col items-center gap-1 py-6 text-ink-dim">
                   <Layers className="h-6 w-6 opacity-40" />
-                  <p className="text-sm">No parts assigned to you yet.</p>
+                  <p className="text-sm">{currentUserId ? "Nothing on your plate right now." : "Sign in to see your TODO."}</p>
                 </div>
               ) : null}
             </section>
+
+            {myWaitingParts.length > 0 ? (
+              <section>
+                <h3 className="mb-1 text-3xl font-semibold text-steel-100">Up Next</h3>
+                <p className="mb-2 text-xs text-ink-dim">Assigned to you — waiting on the machinist first.</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                  {myWaitingParts.map((part) => (
+                    <button
+                      key={part.id}
+                      type="button"
+                      onClick={() => openPartDetail(part.id)}
+                      className="relative h-[184px] overflow-hidden border border-blue-500/40 bg-blue-500/10 text-left transition-all duration-150 hover:scale-[1.02] hover:brightness-110 active:scale-[0.98]"
+                    >
+                      {part.photos[0] && !isVideoStorageKey(part.photos[0].storageKey) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={mediaUrlFromStorageKey(part.photos[0].storageKey)} alt={part.name} loading="lazy" className="h-full w-full object-cover opacity-60" />
+                      ) : (
+                        <div className="h-full w-full bg-steel-800" />
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.86))] p-2">
+                        <p className="line-clamp-1 text-sm font-semibold text-white">{part.name}</p>
+                        <p className="line-clamp-1 text-xs text-steel-300">{part.partNumber}</p>
+                        <p className="line-clamp-1 text-xs text-blue-300">Waiting on machinist</p>
+                        <p className="text-xs text-steel-200">Qty {part.quantityComplete}/{part.quantityRequired}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
         ) : !mobileBoardMode && view === "OVERVIEW" ? (
           <div className="h-full overflow-y-auto p-4">
@@ -1605,7 +1683,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   ) : null}
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
-                  <p className="text-[10px] uppercase tracking-wide text-ink-label">Copies</p>
+                  <p className="text-[10px] uppercase tracking-wide text-ink-label">Quantity</p>
                   <p className="text-base text-ink">{selectedPart.quantityComplete}/{selectedPart.quantityRequired}</p>
                 </div>
                 <div className="rounded-[3px] bg-[rgba(19,27,39,0.45)] py-3">
@@ -1734,41 +1812,6 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   ) : null}
                 </div>
 
-                <div className="rounded-[3px] border border-rim bg-[linear-gradient(120deg,rgba(39,51,67,0.65),rgba(28,38,52,0.85))] p-4">
-                  <h3 className="text-2xl font-semibold text-ink">Notes</h3>
-                  <div className="mt-3 max-h-56 space-y-2 overflow-y-auto rounded-[3px] border border-rim bg-[#1a2230] p-3">
-                    {noteMessages.length ? (
-                      noteMessages.map((message) => (
-                        <div key={message.id} className="rounded-[3px] border border-[#374b64] bg-[#202c3c] px-3 py-2">
-                          <p className="text-xs uppercase tracking-wide text-ink-label">
-                            {new Date(message.createdAt).toLocaleString()}
-                          </p>
-                          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{message.text}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex flex-col items-center gap-1 py-4 text-ink-dim">
-                        <StickyNote className="h-5 w-5 opacity-40" />
-                        <p className="text-sm">No notes yet.</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <textarea
-                      value={noteInput}
-                      onChange={(event) => setNoteInput(event.target.value)}
-                      placeholder="Add a note..."
-                      className="min-h-[72px] flex-1 resize-y rounded-[3px] border border-rim bg-surface-card px-3 py-2 text-sm text-ink outline-none focus:border-rim-brand"
-                    />
-                    <button
-                      type="button"
-                      onClick={postNoteMessage}
-                      className="h-fit rounded-[3px] border border-rim-brand bg-brand-600/15 px-3 py-2 text-sm text-ink-link hover:bg-brand-600/25"
-                    >
-                      Add Note
-                    </button>
-                  </div>
-                </div>
               </div>
             ) : (
               <div className="space-y-4 bg-[radial-gradient(circle_at_20%_20%,rgba(97,132,170,0.15),transparent_50%)] p-4">

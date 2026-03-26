@@ -17,8 +17,6 @@ type GoogleTokenInfo = {
   name?: string;
   picture?: string;
 };
-const ALLOWED_DOMAIN = "stmarobotics.org";
-
 export async function POST(request: NextRequest) {
   const parsed = await parseJson(request, schema);
   if (!parsed.ok) return parsed.response;
@@ -44,8 +42,9 @@ export async function POST(request: NextRequest) {
   }
 
   const email = tokenInfo.email.toLowerCase();
-  if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
-    return jsonError(`Only @${ALLOWED_DOMAIN} Google accounts are allowed.`, 403);
+  const allowedDomain = env.GOOGLE_AUTH_DOMAIN?.trim();
+  if (allowedDomain && !email.endsWith(`@${allowedDomain}`)) {
+    return jsonError(`Only @${allowedDomain} Google accounts are allowed.`, 403);
   }
   const displayName = tokenInfo.name?.trim() || tokenInfo.given_name?.trim() || email.split("@")[0];
   const user = await prisma.user.upsert({

@@ -10,6 +10,7 @@ const optionalUrl = z.preprocess(emptyToUndefined, z.string().url().optional());
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
   GOOGLE_CLIENT_ID: optionalStr,
+  GOOGLE_AUTH_DOMAIN: optionalStr,
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(10),
   DEMO_SESSION_COOKIE: z.string().min(1).default("demo_session_id"),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(60 * 60 * 24 * 14),
