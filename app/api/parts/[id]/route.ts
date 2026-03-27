@@ -5,7 +5,6 @@ import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
 import { canManagePart, editorContext, isAdminUser } from "@/lib/permissions";
-import { statusToStage } from "@/lib/status";
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
@@ -94,34 +93,32 @@ export async function PATCH(
 
   const targetRequired = nextData.quantityRequired ?? existing.quantityRequired;
   const targetComplete = nextData.quantityComplete ?? existing.quantityComplete;
-  const currentStatus = nextData.status ?? existing.status;
+  const currentStatus = existing.status;
 
-  if (targetComplete >= targetRequired) {
-    const hasPhoto = await prisma.partPhoto.findFirst({
-      where: { partId: id },
-      select: { id: true }
-    });
-    if (!hasPhoto) {
-      return jsonError(
-        "Cannot complete all quantity: please upload at least one photo first.",
-        400
-      );
+  // Stage auto-transitions driven by quantity changes (never modify quantity here)
+  if (nextData.quantityComplete !== undefined) {
+    if (targetComplete >= targetRequired) {
+      const hasPhoto = await prisma.partPhoto.findFirst({
+        where: { partId: id },
+        select: { id: true }
+      });
+      if (!hasPhoto) {
+        return jsonError(
+          "Cannot complete all quantity: please upload at least one photo first.",
+          400
+        );
+      }
+      // Advance to DONE
+      if (currentStatus !== PartStatus.DONE) {
+        nextData.status = PartStatus.DONE;
+      }
+    } else if (currentStatus === PartStatus.DONE) {
+      // Quantity dropped below required — revert from DONE to IN_PROGRESS
+      nextData.status = PartStatus.MACHINED;
+    } else if (targetComplete > 0 && currentStatus === PartStatus.DESIGNED) {
+      // First quantity added while in DESIGNED (assigned or unassigned) — start IN_PROGRESS
+      nextData.status = PartStatus.MACHINED;
     }
-    nextData.quantityComplete = targetRequired;
-    // Auto-advance to DONE when all quantity is complete
-    if (currentStatus !== PartStatus.DONE) {
-      nextData.status = PartStatus.DONE;
-    }
-  } else if (currentStatus === PartStatus.DONE && targetComplete < targetRequired) {
-    // Auto-revert from DONE to MACHINED (IN_PROGRESS stage) when quantity drops
-    nextData.status = PartStatus.MACHINED;
-  } else if (
-    currentStatus === PartStatus.DESIGNED &&
-    targetComplete < targetRequired &&
-    nextData.quantityComplete === undefined
-  ) {
-    // Only reset qty to 0 if explicitly transitioning to DESIGNED
-    nextData.quantityComplete = 0;
   }
 
   const updated = await prisma.part.update({
