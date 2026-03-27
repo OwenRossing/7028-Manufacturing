@@ -55,19 +55,9 @@ export async function POST(
   }
   const context = await editorContext(userResult, id);
 
-  const nextData: { status: PartStatus; quantityComplete?: number } = {
-    status: parsed.data.toStatus
-  };
-  if (parsed.data.toStatus === PartStatus.DONE) {
-    nextData.quantityComplete = part.quantityRequired;
-  }
-  if (parsed.data.toStatus === PartStatus.DESIGNED) {
-    nextData.quantityComplete = 0;
-  }
-
   await prisma.part.update({
     where: { id },
-    data: nextData
+    data: { status: parsed.data.toStatus }
   });
 
   await prisma.partEvent.create({
