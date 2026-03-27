@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Owen/Repositories/**)",
+      "Bash(npx create-next-app@latest 7028-parts --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --no-eslint --turbopack)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

@@ -54,7 +54,7 @@ function stageCollectionLabel(stage: WorkflowStage): string {
 function stageCollectionSort(stage: WorkflowStage): number {
   if (stage === "UNASSIGNED") return 0;
   if (stage === "ASSIGNED") return 1;
-  if (stage === "MACHINED") return 2;
+  if (stage === "IN_PROGRESS") return 2;
   return 3;
 }
 
@@ -156,7 +156,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [stageOpen, setStageOpen] = useState<Record<WorkflowStage, boolean>>({
     COMPLETED: true,
-    MACHINED: true,
+    IN_PROGRESS: true,
     ASSIGNED: true,
     UNASSIGNED: true
   });
@@ -741,7 +741,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     const grouped: Record<WorkflowStage, PartListItem[]> = {
       UNASSIGNED: [],
       ASSIGNED: [],
-      MACHINED: [],
+      IN_PROGRESS: [],
       COMPLETED: []
     };
     for (const part of sorted) {
@@ -820,8 +820,8 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
       const isCollaborator = part.owners.some((o) => o.role === "COLLABORATOR" && o.userId === currentUserId);
       // Machinist's turn: part is in ASSIGNED stage and they are PRIMARY
       if (isPrimary && stage === "ASSIGNED") return true;
-      // Finisher's turn: part is in MACHINED stage and they are COLLABORATOR
-      if (isCollaborator && stage === "MACHINED") return true;
+      // Finisher's turn: part is in IN_PROGRESS stage and they are COLLABORATOR
+      if (isCollaborator && stage === "IN_PROGRESS") return true;
       return false;
     });
   }, [sorted, currentUserId]);
@@ -1398,7 +1398,7 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
                   />
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  {(["UNASSIGNED", "ASSIGNED", "MACHINED", "COMPLETED"] as WorkflowStage[]).map((stage) => (
+                  {STAGE_ORDER.map((stage) => (
                     <button
                       key={stage}
                       type="button"

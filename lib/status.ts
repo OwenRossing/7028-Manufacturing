@@ -9,39 +9,39 @@ export const ORDER: PartStatus[] = [
   "DONE"
 ];
 
-export type WorkflowStage = "UNASSIGNED" | "ASSIGNED" | "MACHINED" | "COMPLETED";
+export type WorkflowStage = "UNASSIGNED" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED";
 
 export const STAGE_ORDER: WorkflowStage[] = [
   "UNASSIGNED",
   "ASSIGNED",
-  "MACHINED",
+  "IN_PROGRESS",
   "COMPLETED"
 ];
 
 const STAGE_TO_STATUSES: Record<WorkflowStage, PartStatus[]> = {
   UNASSIGNED: ["DESIGNED"],
   ASSIGNED: ["DESIGNED"],
-  MACHINED: ["CUT", "MACHINED", "ASSEMBLED", "VERIFIED"],
+  IN_PROGRESS: ["CUT", "MACHINED", "ASSEMBLED", "VERIFIED"],
   COMPLETED: ["DONE"]
 };
 
 const STAGE_TO_CANONICAL_STATUS: Record<WorkflowStage, PartStatus> = {
   UNASSIGNED: "DESIGNED",
   ASSIGNED: "DESIGNED",
-  MACHINED: "MACHINED",
+  IN_PROGRESS: "MACHINED",
   COMPLETED: "DONE"
 };
 
 export function statusToStage(status: PartStatus, hasOwners = true): WorkflowStage {
   if (status === "DESIGNED") return hasOwners ? "ASSIGNED" : "UNASSIGNED";
-  if (status === "CUT" || status === "MACHINED" || status === "ASSEMBLED" || status === "VERIFIED") return "MACHINED";
+  if (status === "CUT" || status === "MACHINED" || status === "ASSEMBLED" || status === "VERIFIED") return "IN_PROGRESS";
   return "COMPLETED";
 }
 
 export function stageLabel(stage: WorkflowStage): string {
   if (stage === "UNASSIGNED") return "Unassigned";
   if (stage === "ASSIGNED") return "Assigned";
-  if (stage === "MACHINED") return "Machined";
+  if (stage === "IN_PROGRESS") return "In Progress";
   return "Completed";
 }
 
