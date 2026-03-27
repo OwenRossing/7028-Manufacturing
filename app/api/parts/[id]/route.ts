@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { jsonError, parseJson, requireUser } from "@/lib/api";
 import { PART_NUMBER_REGEX, partNumberHint } from "@/lib/part-number";
 import { canManagePart, editorContext, isAdminUser } from "@/lib/permissions";
+import { statusToStage } from "@/lib/status";
 
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
@@ -57,7 +58,10 @@ export async function PATCH(
     return jsonError("Part not found.", 404);
   }
   if (!(await canManagePart(userResult, id))) {
-    return jsonError("You do not have permission to edit this part.", 403);
+    return jsonError(
+      "Permission denied: you must be assigned to this part or be an admin to edit it.",
+      403
+    );
   }
   const context = await editorContext(userResult, id);
 
@@ -72,32 +76,51 @@ export async function PATCH(
   } = { ...parsed.data };
   if (nextData.quantityRequired !== undefined && nextData.quantityComplete !== undefined) {
     if (nextData.quantityComplete > nextData.quantityRequired) {
-      return jsonError("Completed quantity cannot exceed required quantity.", 400);
+      return jsonError(
+        `Invalid quantity: completed (${nextData.quantityComplete}) cannot exceed required (${nextData.quantityRequired}).`,
+        400
+      );
     }
   } else if (
     nextData.quantityRequired !== undefined &&
     nextData.quantityComplete === undefined &&
     existing.quantityComplete > nextData.quantityRequired
   ) {
-    return jsonError("Required quantity cannot be lower than completed quantity.", 400);
+    return jsonError(
+      `Invalid quantity: required cannot be less than already completed (${existing.quantityComplete}).`,
+      400
+    );
   }
 
   const targetRequired = nextData.quantityRequired ?? existing.quantityRequired;
   const targetComplete = nextData.quantityComplete ?? existing.quantityComplete;
+  const currentStatus = nextData.status ?? existing.status;
+
   if (targetComplete >= targetRequired) {
     const hasPhoto = await prisma.partPhoto.findFirst({
       where: { partId: id },
       select: { id: true }
     });
     if (!hasPhoto) {
-      return jsonError("Upload at least one photo before completing all quantity.", 400);
+      return jsonError(
+        "Cannot complete all quantity: please upload at least one photo first.",
+        400
+      );
     }
     nextData.quantityComplete = targetRequired;
-    nextData.status = PartStatus.DONE;
-  } else if ((nextData.status ?? existing.status) === PartStatus.DONE && targetComplete < targetRequired) {
-    nextData.status = PartStatus.DESIGNED;
-  }
-  if ((nextData.status ?? existing.status) === PartStatus.DESIGNED) {
+    // Auto-advance to DONE when all quantity is complete
+    if (currentStatus !== PartStatus.DONE) {
+      nextData.status = PartStatus.DONE;
+    }
+  } else if (currentStatus === PartStatus.DONE && targetComplete < targetRequired) {
+    // Auto-revert from DONE to MACHINED (IN_PROGRESS stage) when quantity drops
+    nextData.status = PartStatus.MACHINED;
+  } else if (
+    currentStatus === PartStatus.DESIGNED &&
+    targetComplete < targetRequired &&
+    nextData.quantityComplete === undefined
+  ) {
+    // Only reset qty to 0 if explicitly transitioning to DESIGNED
     nextData.quantityComplete = 0;
   }
 
