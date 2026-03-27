@@ -718,11 +718,23 @@ export function PartsExplorer({ currentUserId }: { currentUserId: string | null 
     setSelectedPartId(partId);
     setView("DETAIL");
     setDetailPanel("main");
+
+    // Update URL to reflect selected part
+    const params = new URLSearchParams(paramsString);
+    params.set("partId", partId);
+    const nextHref = `${pathname}?${params.toString()}`;
+    router.replace(nextHref, { scroll: false });
   }
 
   function closeMobileDetail() {
     const fallbackView = previousListViewRef.current === "DETAIL" ? "HOME" : previousListViewRef.current;
     setView(fallbackView);
+
+    // Remove partId from URL
+    const params = new URLSearchParams(paramsString);
+    params.delete("partId");
+    const nextHref = `${pathname}?${params.toString()}`;
+    router.replace(nextHref, { scroll: false });
   }
 
   const byStage = useMemo(() => {
