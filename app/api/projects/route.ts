@@ -10,6 +10,10 @@ const createSchema = z.object({
   season: z.string().min(1)
 });
 
+const deleteSchema = z.object({
+  id: z.string().min(1)
+});
+
 export async function GET(request: NextRequest) {
   const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) {
@@ -50,4 +54,35 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json(project, { status: 201 });
+}
+
+export async function DELETE(request: NextRequest) {
+  const userResult = await requireUser(request);
+  if (userResult instanceof NextResponse) {
+    return userResult;
+  }
+  const isAdmin = await isAdminUser(userResult);
+  if (!isAdmin) {
+    return jsonError("Admin access required.", 403);
+  }
+
+  const parsed = await parseJson(request, deleteSchema);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: parsed.data.id },
+    select: { _count: { select: { parts: true } } }
+  });
+
+  if (!project) {
+    return jsonError("Project not found.", 404);
+  }
+
+  await prisma.project.delete({
+    where: { id: parsed.data.id }
+  });
+
+  return NextResponse.json({ success: true });
 }

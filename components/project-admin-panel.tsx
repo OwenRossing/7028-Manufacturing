@@ -111,6 +111,22 @@ export function ProjectAdminPanel({
     setBusy(false);
   }
 
+  async function deleteProject(projectId: string) {
+    if (!confirm("Delete this project and all its parts? This cannot be undone.")) return;
+    setBusy(true);
+    const response = await fetch("/api/projects", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: projectId })
+    });
+    setBusy(false);
+    if (!response.ok) {
+      alert("Failed to delete project.");
+      return;
+    }
+    alert("Project deleted. Refresh page to see changes.");
+  }
+
   function editForPart(part: ProjectPart) {
     return partEdits[part.id] ?? {
       name: part.name,
@@ -251,13 +267,24 @@ export function ProjectAdminPanel({
         <h2 className="text-lg font-semibold text-white">Projects</h2>
         <div className="grid gap-2 md:grid-cols-2">
           {projects.map((project) => (
-            <Link key={project.id} href={`/?projectId=${project.id}`} className="block">
-              <div className="clickable-surface rounded-md bg-steel-850 p-3">
-                <p className="font-medium text-white">{project.name}</p>
-                <p className="text-sm text-steel-300">Season {project.season} | {project.partCount} parts</p>
-                <p className="text-sm font-semibold text-steel-100">Open in Overview</p>
-              </div>
-            </Link>
+            <div key={project.id} className="space-y-1">
+              <Link href={`/?projectId=${project.id}`} className="block">
+                <div className="clickable-surface rounded-md bg-steel-850 p-3">
+                  <p className="font-medium text-white">{project.name}</p>
+                  <p className="text-sm text-steel-300">Season {project.season} | {project.partCount} parts</p>
+                  <p className="text-sm font-semibold text-steel-100">Open in Overview</p>
+                </div>
+              </Link>
+              <Button
+                variant="ghost"
+                onClick={() => deleteProject(project.id)}
+                disabled={busy}
+                className="h-8 w-full"
+              >
+                <Trash2 className="mr-1 h-4 w-4 text-red-300" />
+                Delete Project
+              </Button>
+            </div>
           ))}
         </div>
       </Card>
