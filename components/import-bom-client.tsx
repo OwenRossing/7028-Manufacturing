@@ -118,6 +118,17 @@ export function ImportBomClient({
       .catch(() => setConfig(null));
   }, []);
 
+  // Reset robot selection if current robot is not in the filtered list for the selected team/year
+  useEffect(() => {
+    if (!config?.robotNumbers?.length) return;
+    const validRobots = config.robotNumbers.filter(
+      (item) => item.teamNumber === teamNumber && item.seasonYear === seasonYear
+    );
+    if (validRobots.length > 0 && !validRobots.some((r) => r.robotNumber === robotNumber)) {
+      setRobotNumber("");
+    }
+  }, [config, teamNumber, seasonYear, robotNumber]);
+
   useEffect(() => {
     if (mode !== "ONSHAPE_API" || manualOnshapeIds) return;
 
@@ -218,6 +229,11 @@ export function ImportBomClient({
     setError(null);
     if (mode === "ONSHAPE_API" && (!documentId.trim() || !workspaceId.trim() || !elementId.trim())) {
       setError("Select document, workspace, and assembly element before preview.");
+      setLoading(false);
+      return;
+    }
+    if (!robotNumber.trim()) {
+      setError("Select a robot number before preview.");
       setLoading(false);
       return;
     }
