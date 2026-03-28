@@ -18,6 +18,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force --skip-generate && npm run prisma:seed",
+    "db:wipe-parts": "tsx scripts/wipe-parts.ts",
     "create-user": "tsx scripts/create-user.ts"
   },
   "dependencies": {
