@@ -104,18 +104,24 @@ export function ImportBomClient({
     robot: summary?.filters?.robot ?? (robotNumber || "1")
   };
 
+  // Fetch config on mount and when window regains focus (e.g., after adding config in admin panel)
+  const loadConfig = async () => {
+    try {
+      const response = await fetch("/api/config/options");
+      if (!response.ok) throw new Error("Unable to load config options.");
+      const data = (await response.json()) as WorkspaceOptions;
+      setConfig(data);
+      if (data.teamNumbers.length) setTeamNumber((prev) => prev || data.teamNumbers[0]);
+      if (data.seasonYears.length) setSeasonYear((prev) => prev || data.seasonYears[data.seasonYears.length - 1]);
+    } catch {
+      setConfig(null);
+    }
+  };
+
   useEffect(() => {
-    void fetch("/api/config/options")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Unable to load config options.");
-        return (await response.json()) as WorkspaceOptions;
-      })
-      .then((data) => {
-        setConfig(data);
-        if (data.teamNumbers.length) setTeamNumber((prev) => prev || data.teamNumbers[0]);
-        if (data.seasonYears.length) setSeasonYear((prev) => prev || data.seasonYears[data.seasonYears.length - 1]);
-      })
-      .catch(() => setConfig(null));
+    void loadConfig();
+    window.addEventListener("focus", loadConfig);
+    return () => window.removeEventListener("focus", loadConfig);
   }, []);
 
   // Reset robot selection if current robot is not in the filtered list for the selected team/year

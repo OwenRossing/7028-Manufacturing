@@ -207,3 +207,49 @@ export async function addSubsystem(
     label?.trim() || null
   );
 }
+
+export async function deleteTeamNumber(teamNumber: string): Promise<void> {
+  await ensureTables();
+  const value = sanitizeTeamNumber(teamNumber);
+  if (!value) return;
+  await prisma.$executeRawUnsafe("DELETE FROM app_team_numbers WHERE team_number = $1", value);
+}
+
+export async function deleteRobotNumber(
+  teamNumber: string,
+  seasonYear: string,
+  robotNumber: string
+): Promise<void> {
+  await ensureTables();
+  const team = sanitizeTeamNumber(teamNumber);
+  const year = normalizeSeasonYear(seasonYear);
+  const robot = robotNumber.replace(/\D/g, "").slice(0, 2);
+  if (!team || !year || !robot) return;
+  await prisma.$executeRawUnsafe(
+    "DELETE FROM app_robot_numbers WHERE team_number = $1 AND season_year = $2 AND robot_number = $3",
+    team,
+    year,
+    robot
+  );
+}
+
+export async function deleteSubsystem(
+  teamNumber: string,
+  seasonYear: string,
+  robotNumber: string,
+  subsystemNumber: string
+): Promise<void> {
+  await ensureTables();
+  const team = sanitizeTeamNumber(teamNumber);
+  const year = normalizeSeasonYear(seasonYear);
+  const robot = robotNumber.replace(/\D/g, "").slice(0, 2);
+  const subsystem = subsystemNumber.replace(/\D/g, "").slice(0, 1);
+  if (!team || !year || !robot || !subsystem) return;
+  await prisma.$executeRawUnsafe(
+    "DELETE FROM app_subsystems WHERE team_number = $1 AND season_year = $2 AND robot_number = $3 AND subsystem_number = $4",
+    team,
+    year,
+    robot,
+    subsystem
+  );
+}

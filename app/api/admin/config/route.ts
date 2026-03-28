@@ -6,10 +6,13 @@ import {
   addRobotNumber,
   addSubsystem,
   addTeamNumber,
+  deleteRobotNumber,
+  deleteSubsystem,
+  deleteTeamNumber,
   listWorkspaceOptions
 } from "@/lib/workspace-config";
 
-const schema = z.discriminatedUnion("kind", [
+const createSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("TEAM"),
     teamNumber: z.string().min(1)
@@ -27,6 +30,26 @@ const schema = z.discriminatedUnion("kind", [
     robotNumber: z.string().min(1),
     subsystemNumber: z.string().min(1),
     label: z.string().optional()
+  })
+]);
+
+const deleteSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("TEAM"),
+    teamNumber: z.string().min(1)
+  }),
+  z.object({
+    kind: z.literal("ROBOT"),
+    teamNumber: z.string().min(1),
+    seasonYear: z.string().min(1),
+    robotNumber: z.string().min(1)
+  }),
+  z.object({
+    kind: z.literal("SUBSYSTEM"),
+    teamNumber: z.string().min(1),
+    seasonYear: z.string().min(1),
+    robotNumber: z.string().min(1),
+    subsystemNumber: z.string().min(1)
   })
 ]);
 
@@ -51,7 +74,7 @@ export async function POST(request: NextRequest) {
     return jsonError("Admin access required.", 403);
   }
 
-  const parsed = await parseJson(request, schema);
+  const parsed = await parseJson(request, createSchema);
   if (!parsed.ok) return parsed.response;
 
   if (parsed.data.kind === "TEAM") {
@@ -65,6 +88,35 @@ export async function POST(request: NextRequest) {
       parsed.data.robotNumber,
       parsed.data.subsystemNumber,
       parsed.data.label
+    );
+  }
+
+  const options = await listWorkspaceOptions();
+  return NextResponse.json(options);
+}
+
+export async function DELETE(request: NextRequest) {
+  const userResult = await requireUser(request);
+  if (userResult instanceof NextResponse) {
+    return userResult;
+  }
+  if (!(await isAdminUser(userResult))) {
+    return jsonError("Admin access required.", 403);
+  }
+
+  const parsed = await parseJson(request, deleteSchema);
+  if (!parsed.ok) return parsed.response;
+
+  if (parsed.data.kind === "TEAM") {
+    await deleteTeamNumber(parsed.data.teamNumber);
+  } else if (parsed.data.kind === "ROBOT") {
+    await deleteRobotNumber(parsed.data.teamNumber, parsed.data.seasonYear, parsed.data.robotNumber);
+  } else {
+    await deleteSubsystem(
+      parsed.data.teamNumber,
+      parsed.data.seasonYear,
+      parsed.data.robotNumber,
+      parsed.data.subsystemNumber
     );
   }
 
