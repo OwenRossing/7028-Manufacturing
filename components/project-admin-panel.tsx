@@ -239,6 +239,28 @@ export function ProjectAdminPanel({
     setBusy(false);
   }
 
+  async function deleteConfig(payload: Record<string, string>) {
+    if (!confirm("Delete this item? This cannot be undone.")) return;
+    setBusy(true);
+    setConfigMessage(null);
+    const response = await fetch("/api/admin/config", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = (await response.json().catch(() => null)) as (WorkspaceOptions & { error?: string }) | null;
+    if (!response.ok) {
+      setConfigMessage(data?.error ?? "Unable to delete.");
+      setBusy(false);
+      return;
+    }
+    if (data) {
+      setWorkspaceConfig(data);
+    }
+    setConfigMessage("Deleted.");
+    setBusy(false);
+  }
+
   return (
     <section className="space-y-4">
       <Card className="space-y-3">
@@ -298,7 +320,15 @@ export function ProjectAdminPanel({
             <p className="text-sm font-semibold text-white">Teams</p>
             <div className="flex min-h-[2rem] flex-wrap gap-1">
               {workspaceConfig.teamNumbers.length ? workspaceConfig.teamNumbers.map((team) => (
-                <span key={team} className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100">{team}</span>
+                <button
+                  key={team}
+                  onClick={() => deleteConfig({ kind: "TEAM", teamNumber: team })}
+                  disabled={busy}
+                  title="Click to delete"
+                  className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100 hover:bg-red-700 transition-colors"
+                >
+                  {team} ✕
+                </button>
               )) : <span className="text-xs text-steel-400">None added yet</span>}
             </div>
             <div className="mt-auto flex gap-2">
@@ -319,9 +349,15 @@ export function ProjectAdminPanel({
             <p className="text-sm font-semibold text-white">Robots</p>
             <div className="flex min-h-[2rem] flex-wrap gap-1">
               {workspaceConfig.robotNumbers.length ? workspaceConfig.robotNumbers.map((item) => (
-                <span key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}`} className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100">
-                  {item.teamNumber}-{item.seasonYear}-{item.robotNumber}
-                </span>
+                <button
+                  key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}`}
+                  onClick={() => deleteConfig({ kind: "ROBOT", teamNumber: item.teamNumber, seasonYear: item.seasonYear, robotNumber: item.robotNumber })}
+                  disabled={busy}
+                  title="Click to delete"
+                  className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100 hover:bg-red-700 transition-colors"
+                >
+                  {item.teamNumber}-{item.seasonYear}-{item.robotNumber} ✕
+                </button>
               )) : <span className="text-xs text-steel-400">None added yet</span>}
             </div>
             <div className="mt-auto space-y-2">
@@ -361,9 +397,15 @@ export function ProjectAdminPanel({
             <p className="text-sm font-semibold text-white">Subsystems</p>
             <div className="flex min-h-[2rem] flex-wrap gap-1">
               {workspaceConfig.subsystems.length ? workspaceConfig.subsystems.map((item) => (
-                <span key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}-${item.subsystemNumber}`} className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100">
-                  {item.subsystemNumber}000{item.label ? ` ${item.label}` : ""}
-                </span>
+                <button
+                  key={`${item.teamNumber}-${item.seasonYear}-${item.robotNumber}-${item.subsystemNumber}`}
+                  onClick={() => deleteConfig({ kind: "SUBSYSTEM", teamNumber: item.teamNumber, seasonYear: item.seasonYear, robotNumber: item.robotNumber, subsystemNumber: item.subsystemNumber })}
+                  disabled={busy}
+                  title="Click to delete"
+                  className="rounded bg-steel-700 px-2 py-0.5 text-xs text-steel-100 hover:bg-red-700 transition-colors"
+                >
+                  {item.subsystemNumber}000{item.label ? ` ${item.label}` : ""} ✕
+                </button>
               )) : <span className="text-xs text-steel-400">None added yet</span>}
             </div>
             <div className="mt-auto space-y-2">
