@@ -83,7 +83,8 @@ if (mode === 'production') {
 } else {
   // db push keeps the schema in sync without requiring migration history.
   // Works correctly whether the DB is fresh or already has tables.
-  run('npx', ['prisma', 'db', 'push'], 'Syncing schema...')
+  // --accept-data-loss allows dropping tables (schema has breaking changes).
+  run('npx', ['prisma', 'db', 'push', '--accept-data-loss'], 'Syncing schema...')
   if (mode === 'demo') {
     run('npx', ['tsx', 'prisma/seed.ts'], 'Seeding demo data...')
   }
