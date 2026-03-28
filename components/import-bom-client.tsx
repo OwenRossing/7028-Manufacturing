@@ -98,6 +98,10 @@ export function ImportBomClient({
   const [selectorError, setSelectorError] = useState<string | null>(null);
   const [config, setConfig] = useState<WorkspaceOptions | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Tracks whether the current robotNumber was set by auto-selection (vs. user choice).
+  // When the robot list expands (e.g. user adds a second robot in admin), we must clear
+  // the old auto-selected value so the user is forced to pick explicitly.
+  const robotWasAutoSelected = useRef(false);
   const activeFilters = {
     team: summary?.filters?.team ?? (teamNumber || "7028"),
     year: summary?.filters?.year ?? (seasonYear || String(new Date().getFullYear()).slice(-2)),
@@ -134,8 +138,18 @@ export function ImportBomClient({
       (item) => item.teamNumber === teamNumber && item.seasonYear === seasonYear
     );
     setRobotNumber((prev) => {
+      if (validRobots.length === 1) {
+        robotWasAutoSelected.current = true;
+        return validRobots[0].robotNumber;
+      }
+      // If the current selection was auto-chosen (not by the user) and there are now
+      // multiple options, reset so the user is required to pick explicitly.
+      if (robotWasAutoSelected.current) {
+        robotWasAutoSelected.current = false;
+        return "";
+      }
       if (validRobots.some((r) => r.robotNumber === prev)) return prev;
-      return validRobots.length === 1 ? validRobots[0].robotNumber : "";
+      return "";
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, teamNumber, seasonYear]);
@@ -235,6 +249,7 @@ export function ImportBomClient({
 
   async function previewImport(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    console.log("[bom-import-client] submit state:", { teamNumber, seasonYear, robotNumber, projectId, mode });
     setLoading(true);
     setMessage(null);
     setError(null);
@@ -584,7 +599,7 @@ export function ImportBomClient({
             <div>
               <label className="mb-1 block text-sm text-steel-300">Robot</label>
               {config?.robotNumbers?.length ? (
-                <Select value={robotNumber} onChange={(event) => setRobotNumber(event.target.value)}>
+                <Select value={robotNumber} onChange={(event) => { robotWasAutoSelected.current = false; setRobotNumber(event.target.value); }}>
                   <option value="">Select robot</option>
                   {config.robotNumbers
                     .filter((item) => item.teamNumber === teamNumber && item.seasonYear === seasonYear)
@@ -600,7 +615,7 @@ export function ImportBomClient({
                   name="robotNumber"
                   inputMode="numeric"
                   value={robotNumber}
-                  onChange={(event) => setRobotNumber(event.target.value)}
+                  onChange={(event) => { robotWasAutoSelected.current = false; setRobotNumber(event.target.value); }}
                   className="h-10 w-full rounded-md border border-steel-700 bg-steel-900 px-3 text-sm text-white outline-none ring-offset-steel-950 placeholder:text-steel-500 focus-visible:ring-2 focus-visible:ring-brand-500"
                 />
               )}

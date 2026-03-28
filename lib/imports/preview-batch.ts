@@ -51,7 +51,14 @@ export async function createImportPreviewBatch(
     throw new Error("Project not found.");
   }
 
-  const filteredRows = input.rows.filter((row) => matchesPartPrefix(row.partNumber, input.filters));
+  console.log("[preview-batch] filters:", input.filters);
+  console.log("[preview-batch] total rows before filter:", input.rows.length);
+  console.log("[preview-batch] part numbers:", input.rows.map(r => r.partNumber));
+  const filteredRows = input.rows.filter((row) => {
+    const match = matchesPartPrefix(row.partNumber, input.filters);
+    if (!match) console.log("[preview-batch] filtered out:", row.partNumber);
+    return match;
+  });
   const filteredOutCount = input.rows.length - filteredRows.length;
 
   if (filteredRows.length === 0 && input.errors.length === 0) {

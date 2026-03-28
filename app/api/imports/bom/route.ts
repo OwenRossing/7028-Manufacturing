@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
   const teamNumber = String(formData.get("teamNumber") ?? "").trim();
   const seasonYear = String(formData.get("seasonYear") ?? "").trim();
   const robotNumber = String(formData.get("robotNumber") ?? "").trim();
+  console.log("[bom-import] received:", { projectId, teamNumber, seasonYear, robotNumber, fileName: (formData.get("file") as File)?.name });
   if (!robotNumber) {
     return jsonError("robotNumber is required.", 400);
   }
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
     }
 
     const parsed = provider.parseCsvBom(csvContent);
+    console.log("[bom-import] parsed rows:", parsed.rows.length, "errors:", parsed.errors.length);
+    console.log("[bom-import] parsed part numbers:", parsed.rows.map(r => r.partNumber));
     if (!parsed.rows.length && !parsed.errors.length) {
       return jsonError("No rows detected in uploaded CSV.", 400);
     }
@@ -76,6 +79,7 @@ export async function POST(request: NextRequest) {
       year: seasonYear,
       robot: robotNumber
     });
+    console.log("[bom-import] filters:", filters);
 
     const preview = await createImportPreviewBatch({
       prisma,

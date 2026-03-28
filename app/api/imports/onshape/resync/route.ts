@@ -52,6 +52,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(existingToken.responseJson);
   }
 
+  if (!parsed.data.robotNumber?.trim()) {
+    return jsonError("robotNumber is required.", 400);
+  }
+
   const filters = normalizeImportPrefixFilters({
     team: parsed.data.teamNumber,
     year: parsed.data.seasonYear,
