@@ -1,4 +1,4 @@
-import { PartStatus } from "@prisma/client";
+import { PartStatus, PartEventType } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { PartDetailClient } from "@/components/part-detail-client";
@@ -54,6 +54,26 @@ export default async function PartDetailPage({
   const lastMachinedBy = latestActorForStatus(part.events, PartStatus.MACHINED);
   const lastFinishedBy = latestActorForStatus(part.events, PartStatus.DONE);
 
+  const importedEvent = part.events.find((e) => e.eventType === PartEventType.IMPORTED);
+  let bomData: Record<string, unknown> | null = null;
+
+  if (importedEvent) {
+    const payload = importedEvent.payloadJson;
+    const batchId = payload && typeof payload === "object" && "batchId" in payload ? (payload.batchId as string) : null;
+    if (batchId) {
+      const bomRow = await prisma.importRow.findFirst({
+        where: {
+          batchId,
+          partNumber: part.partNumber
+        },
+        select: { rawJson: true }
+      });
+      if (bomRow?.rawJson && typeof bomRow.rawJson === "object" && !Array.isArray(bomRow.rawJson)) {
+        bomData = bomRow.rawJson as Record<string, unknown>;
+      }
+    }
+  }
+
   return (
     <section className="space-y-4 p-4">
       <Card className="space-y-1">
@@ -84,6 +104,7 @@ export default async function PartDetailPage({
         isAdmin={isAdmin}
         lastMachinedBy={lastMachinedBy}
         lastFinishedBy={lastFinishedBy}
+        bomData={bomData}
       />
     </section>
   );

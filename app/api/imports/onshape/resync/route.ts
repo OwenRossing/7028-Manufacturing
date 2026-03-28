@@ -22,6 +22,16 @@ const schema = z.object({
   commit: z.boolean().optional().default(true)
 });
 
+function validateOnshapeCredentials(): void {
+  const accessKey = process.env.ONSHAPE_ACCESS_KEY;
+  const secretKey = process.env.ONSHAPE_SECRET_KEY;
+  if (!accessKey || !secretKey) {
+    throw new Error(
+      "Onshape API credentials not configured. Set ONSHAPE_ACCESS_KEY and ONSHAPE_SECRET_KEY environment variables."
+    );
+  }
+}
+
 const provider = new OnshapeBomProvider(new OnshapeClient(new EnvOnshapeCredentialsProvider()));
 
 export const runtime = "nodejs";
@@ -29,6 +39,9 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const userResult = await requireUser(request);
   if (userResult instanceof NextResponse) return userResult;
+
+  validateOnshapeCredentials();
+
   const parsed = await parseJson(request, schema);
   if (!parsed.ok) return parsed.response;
 

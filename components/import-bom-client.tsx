@@ -222,6 +222,8 @@ export function ImportBomClient({
       return;
     }
 
+    const idempotencyKey = generateUUID();
+
     const response =
       mode === "CSV"
         ? await (async () => {
@@ -232,12 +234,16 @@ export function ImportBomClient({
             formData.set("robotNumber", robotNumber);
             return fetch("/api/imports/bom", {
               method: "POST",
+              headers: { "x-idempotency-key": idempotencyKey },
               body: formData
             });
           })()
         : await fetch("/api/imports/bom/onshape", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "x-idempotency-key": idempotencyKey
+            },
             body: JSON.stringify({
               projectId,
               documentId,

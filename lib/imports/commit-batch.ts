@@ -120,7 +120,10 @@ export async function commitImportBatch(params: {
           ? extractOnshapeImportNotes(row.rawJson)
           : null;
 
-      if (!existing && row.action === ImportRowAction.CREATE) {
+      if (row.action === ImportRowAction.CREATE) {
+        if (existing) {
+          continue;
+        }
         const newPart = await trx.part.create({
           data: {
             projectId: batch.projectId,
@@ -151,7 +154,10 @@ export async function commitImportBatch(params: {
         continue;
       }
 
-      if (existing && row.action === ImportRowAction.UPDATE) {
+      if (row.action === ImportRowAction.UPDATE) {
+        if (!existing) {
+          continue;
+        }
         await trx.part.update({
           where: { id: existing.id },
           data: {

@@ -70,7 +70,8 @@ export function PartDetailClient({
   currentUserId,
   isAdmin,
   lastMachinedBy,
-  lastFinishedBy
+  lastFinishedBy,
+  bomData
 }: {
   part: PartData;
   photos: PartPhoto[];
@@ -79,6 +80,7 @@ export function PartDetailClient({
   isAdmin: boolean;
   lastMachinedBy: string;
   lastFinishedBy: string;
+  bomData: Record<string, unknown> | null;
 }) {
   const queryClient = useQueryClient();
 
@@ -96,6 +98,7 @@ export function PartDetailClient({
   const [partPhotos, setPartPhotos] = useState<PartPhoto[]>(photos);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bomOpen, setBomOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const collaboratorOptions = useMemo(() => users, [users]);
@@ -449,6 +452,47 @@ export function PartDetailClient({
           </Card>
         ) : null}
       </section>
+
+      {bomData && Object.keys(bomData).length > 0 ? (
+        <section id="part-bom" className="space-y-0">
+          <button
+            type="button"
+            onClick={() => setBomOpen((prev) => !prev)}
+            className={`clickable-surface flex w-full items-center justify-between bg-steel-850 px-4 py-3 text-left text-sm font-semibold text-white ${
+              bomOpen ? "rounded-t-xl rounded-b-none border-b-0" : "rounded-xl"
+            }`}
+          >
+            <span>BOM Details</span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${bomOpen ? "rotate-180" : ""}`} />
+          </button>
+          {bomOpen ? (
+            <Card className="rounded-t-none border-t-0">
+              <div className="space-y-2">
+                {Object.entries(bomData)
+                  .filter(([key]) => key && !key.startsWith("_") && typeof key === "string")
+                  .map(([key, value]) => {
+                    const displayKey = key
+                      .replace(/([A-Z])/g, " $1")
+                      .replace(/^./, (str) => str.toUpperCase())
+                      .trim();
+                    const displayValue =
+                      value === null
+                        ? "—"
+                        : typeof value === "object"
+                          ? JSON.stringify(value)
+                          : String(value);
+                    return (
+                      <div key={key} className="flex items-start justify-between border-b border-steel-800 py-2 text-sm last:border-b-0">
+                        <span className="text-steel-400">{displayKey}</span>
+                        <span className="ml-4 text-right font-medium text-white">{displayValue}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </Card>
+          ) : null}
+        </section>
+      ) : null}
 
       <section id="part-settings" className="space-y-0">
         <button

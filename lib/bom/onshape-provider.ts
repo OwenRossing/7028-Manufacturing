@@ -74,6 +74,7 @@ function normalizePartNumber(value: string | undefined): string | null {
     .replace(/\s+/g, " ")
     .trim();
   if (!compact) return null;
+  if (compact.length > 100) return null;
   const matched = compact.match(/\d{1,12}-\d{2}-\d{1,2}-\d{4}/);
   if (matched) return matched[0];
   return compact;

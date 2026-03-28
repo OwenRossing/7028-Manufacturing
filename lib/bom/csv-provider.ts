@@ -1,31 +1,53 @@
 import { BomImportProvider } from "@/lib/bom/provider";
 import { BomRowError, NormalizedBomRow, ParseCsvBomResult } from "@/lib/bom/types";
 
-function parseCsvLine(line: string): string[] {
-  const cells: string[] = [];
-  let current = "";
+function parseCSV(content: string): { rows: string[][]; errors: string[] } {
+  const rows: string[][] = [];
+  const errors: string[] = [];
+  let currentRow: string[] = [];
+  let currentCell = "";
   let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    const next = content[i + 1];
+
     if (char === '"') {
-      const next = line[i + 1];
       if (inQuotes && next === '"') {
-        current += '"';
-        i += 1;
+        currentCell += '"';
+        i++;
       } else {
         inQuotes = !inQuotes;
       }
-      continue;
+    } else if (char === "," && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      currentCell = "";
+    } else if ((char === "\r" || char === "\n") && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      if (currentRow.some((c) => c.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = "";
+      if (char === "\r" && next === "\n") {
+        i++;
+      }
+    } else {
+      currentCell += char;
     }
-    if (char === "," && !inQuotes) {
-      cells.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += char;
   }
-  cells.push(current.trim());
-  return cells;
+
+  if (inQuotes) {
+    errors.push("CSV has unclosed quotes. Check your file formatting.");
+  }
+  if (currentCell.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentCell.trim());
+    if (currentRow.some((c) => c.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  return { rows, errors };
 }
 
 function normalizeFieldName(name: string): string {
@@ -69,11 +91,11 @@ function parseQuantity(
     });
     return undefined;
   }
-  if (parsed < 0) {
+  if (parsed <= 0) {
     errors.push({
       row,
       column,
-      message: `Quantity value "${trimmed}" cannot be negative.`,
+      message: `Quantity value "${trimmed}" must be greater than 0.`,
       raw: rawValue
     });
     return undefined;
@@ -92,13 +114,20 @@ function parseQuantity(
 
 export class CsvOnshapeBomProvider implements BomImportProvider {
   parseCsvBom(content: string): ParseCsvBomResult {
-    const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    const { rows: csvRows, errors: parseErrors } = parseCSV(content);
 
-    if (lines.length < 2) {
-      return { rows: [], errors: [] };
+    if (csvRows.length < 2) {
+      return {
+        rows: [],
+        errors: parseErrors.map((msg) => ({
+          row: 1,
+          column: "global",
+          message: msg
+        }))
+      };
     }
 
-    const headers = parseCsvLine(lines[0]);
+    const headers = csvRows[0];
     const partNumberHeader = findHeader(headers, [
       "Part Number",
       "PartNumber",
@@ -111,25 +140,28 @@ export class CsvOnshapeBomProvider implements BomImportProvider {
     const externalKeyHeader = findHeader(headers, ["ID", "Item ID", "Key"]);
 
     const rows: NormalizedBomRow[] = [];
-    const errors: BomRowError[] = [];
+    const errors: BomRowError[] = parseErrors.map((msg) => ({
+      row: 1,
+      column: "global",
+      message: msg
+    }));
 
-    lines.slice(1).forEach((line, index) => {
+    csvRows.slice(1).forEach((values, index) => {
       const csvRow = index + 2;
-      const values = parseCsvLine(line);
       const raw: Record<string, string> = {};
       headers.forEach((header, headerIndex) => {
         raw[header] = values[headerIndex] ?? "";
       });
 
       const partNumber = (partNumberHeader ? raw[partNumberHeader] : "").trim();
-      const name = (nameHeader ? raw[nameHeader] : "").trim() || partNumber;
+      const nameRaw = (nameHeader ? raw[nameHeader] : "").trim();
+      const name = nameRaw || partNumber;
       const quantityRaw = quantityHeader ? raw[quantityHeader] : undefined;
       const errorsBeforeQuantity = errors.length;
       const quantityNeeded = parseQuantity(quantityRaw, csvRow, quantityHeader, errors);
       const externalKey = externalKeyHeader ? raw[externalKeyHeader]?.trim() : undefined;
 
       if (!partNumber) {
-        // Skip empty/non-part rows from exported BOMs.
         return;
       }
 
@@ -138,13 +170,11 @@ export class CsvOnshapeBomProvider implements BomImportProvider {
           row: csvRow,
           column: nameHeader,
           message: "Part name is required.",
-          raw: nameHeader ? raw[nameHeader] : line
+          raw: nameHeader ? raw[nameHeader] : ""
         });
-      }
-
-      if (!name) {
         return;
       }
+
       if (errors.length > errorsBeforeQuantity) {
         return;
       }

@@ -53,8 +53,12 @@ export async function createImportPreviewBatch(
 
   const filteredRows = input.rows.filter((row) => matchesPartPrefix(row.partNumber, input.filters));
   const filteredOutCount = input.rows.length - filteredRows.length;
+
   if (filteredRows.length === 0 && input.errors.length === 0) {
-    throw new Error("No rows matched Team/Year/Robot filter.");
+    throw new Error(
+      `No rows matched filter (Team: ${input.filters.team}, Year: ${input.filters.year}, Robot: ${input.filters.robot}). ` +
+        `Verify that part numbers start with the team prefix (e.g., "${input.filters.team}-${input.filters.year}-${input.filters.robot}-").`
+    );
   }
 
   const existingParts = await input.prisma.part.findMany({
