@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
   const teamNumber = String(formData.get("teamNumber") ?? "").trim();
   const seasonYear = String(formData.get("seasonYear") ?? "").trim();
   const robotNumber = String(formData.get("robotNumber") ?? "").trim();
+  if (!robotNumber) {
+    return jsonError("robotNumber is required.", 400);
+  }
 
   const token = request.headers.get("x-idempotency-key");
   const scope = `bom-import:${projectId}:${file.name}:${file.lastModified}`;

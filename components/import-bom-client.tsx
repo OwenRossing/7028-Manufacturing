@@ -124,16 +124,21 @@ export function ImportBomClient({
     return () => window.removeEventListener("focus", loadConfig);
   }, []);
 
-  // Keep robot selection in sync with team/year changes and config updates
+  // Keep robot selection in sync with team/year changes and config updates.
+  // Uses functional setter so robotNumber is NOT in the dependency array —
+  // the effect must only fire when config/team/year change, never when the
+  // user changes their own robot selection (which would immediately reset it).
   useEffect(() => {
     if (!config?.robotNumbers?.length) return;
     const validRobots = config.robotNumbers.filter(
       (item) => item.teamNumber === teamNumber && item.seasonYear === seasonYear
     );
-    if (!validRobots.some((r) => r.robotNumber === robotNumber)) {
-      setRobotNumber(validRobots.length === 1 ? validRobots[0].robotNumber : "");
-    }
-  }, [config, teamNumber, seasonYear, robotNumber]);
+    setRobotNumber((prev) => {
+      if (validRobots.some((r) => r.robotNumber === prev)) return prev;
+      return validRobots.length === 1 ? validRobots[0].robotNumber : "";
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, teamNumber, seasonYear]);
 
   useEffect(() => {
     if (mode !== "ONSHAPE_API" || manualOnshapeIds) return;
