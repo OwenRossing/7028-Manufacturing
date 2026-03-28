@@ -83,7 +83,7 @@ export function ImportBomClient({
   const [mode, setMode] = useState<ImportMode>("CSV");
   const [teamNumber, setTeamNumber] = useState("7028");
   const [seasonYear, setSeasonYear] = useState(String(new Date().getFullYear()).slice(-2));
-  const [robotNumber, setRobotNumber] = useState("1");
+  const [robotNumber, setRobotNumber] = useState("");
   const [documentId, setDocumentId] = useState("");
   const [workspaceId, setWorkspaceId] = useState("");
   const [elementId, setElementId] = useState("");
@@ -124,14 +124,14 @@ export function ImportBomClient({
     return () => window.removeEventListener("focus", loadConfig);
   }, []);
 
-  // Reset robot selection if current robot is not in the filtered list for the selected team/year
+  // Keep robot selection in sync with team/year changes and config updates
   useEffect(() => {
     if (!config?.robotNumbers?.length) return;
     const validRobots = config.robotNumbers.filter(
       (item) => item.teamNumber === teamNumber && item.seasonYear === seasonYear
     );
-    if (validRobots.length > 0 && !validRobots.some((r) => r.robotNumber === robotNumber)) {
-      setRobotNumber("");
+    if (!validRobots.some((r) => r.robotNumber === robotNumber)) {
+      setRobotNumber(validRobots.length === 1 ? validRobots[0].robotNumber : "");
     }
   }, [config, teamNumber, seasonYear, robotNumber]);
 
