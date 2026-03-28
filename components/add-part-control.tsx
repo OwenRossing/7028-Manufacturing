@@ -223,6 +223,13 @@ export function AddPartControl({ className }: { className?: string }) {
     return filtered.length ? filtered : [importRobotNumber || "1"];
   }, [config?.robotNumbers, importRobotNumber, importSeasonYear, importTeamNumber]);
 
+  useEffect(() => {
+    if (importRobotOptions.length > 0 && !importRobotOptions.includes(importRobotNumber)) {
+      setImportRobotNumber(importRobotOptions[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importRobotOptions]);
+
   const subsystemOptions = useMemo(() => {
     if (!config) return [];
     return config.subsystems.filter(

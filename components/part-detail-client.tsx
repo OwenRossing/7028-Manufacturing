@@ -469,22 +469,23 @@ export function PartDetailClient({
             <Card className="rounded-t-none border-t-0">
               <div className="space-y-2">
                 {Object.entries(bomData)
-                  .filter(([key]) => key && !key.startsWith("_") && typeof key === "string")
+                  .filter(([key, value]) => {
+                    if (!key || typeof key !== "string") return false;
+                    if (key.startsWith("_") || key.startsWith("onshape")) return false;
+                    if (key === "itemSource") return false;
+                    if (value === null || value === "" || value === undefined) return false;
+                    if (typeof value === "object") return false;
+                    return true;
+                  })
                   .map(([key, value]) => {
                     const displayKey = key
                       .replace(/([A-Z])/g, " $1")
                       .replace(/^./, (str) => str.toUpperCase())
                       .trim();
-                    const displayValue =
-                      value === null
-                        ? "—"
-                        : typeof value === "object"
-                          ? JSON.stringify(value)
-                          : String(value);
                     return (
                       <div key={key} className="flex items-start justify-between border-b border-steel-800 py-2 text-sm last:border-b-0">
                         <span className="text-steel-400">{displayKey}</span>
-                        <span className="ml-4 text-right font-medium text-white">{displayValue}</span>
+                        <span className="ml-4 text-right font-medium text-white">{String(value)}</span>
                       </div>
                     );
                   })}
