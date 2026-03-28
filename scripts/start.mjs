@@ -81,10 +81,9 @@ if (mode === 'production') {
   // migrate deploy is safe for managed DBs with proper migration history
   run('npx', ['prisma', 'migrate', 'deploy'], 'Applying migrations...')
 } else {
-  // db push keeps the schema in sync without requiring migration history.
-  // Works correctly whether the DB is fresh or already has tables.
-  // --accept-data-loss allows dropping tables (schema has breaking changes).
-  run('npx', ['prisma', 'db', 'push', '--accept-data-loss'], 'Syncing schema...')
+  // Use migrations to handle schema changes (including breaking changes).
+  // This is safer than db push as it tracks all changes and doesn't re-drop tables.
+  run('npx', ['prisma', 'migrate', 'deploy'], 'Syncing schema...')
   if (mode === 'demo') {
     run('npx', ['tsx', 'prisma/seed.ts'], 'Seeding demo data...')
   }
