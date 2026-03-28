@@ -249,11 +249,18 @@ export function ImportBomClient({
     const response =
       mode === "CSV"
         ? await (async () => {
-            const formData = new FormData(event.currentTarget);
-            formData.set("projectId", projectId);
-            formData.set("teamNumber", teamNumber);
-            formData.set("seasonYear", seasonYear);
-            formData.set("robotNumber", robotNumber);
+            const file = fileInputRef.current?.files?.[0];
+            if (!file) {
+              setError("Please select a CSV file.");
+              setLoading(false);
+              return null;
+            }
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("projectId", projectId);
+            formData.append("teamNumber", teamNumber);
+            formData.append("seasonYear", seasonYear);
+            formData.append("robotNumber", robotNumber);
             return fetch("/api/imports/bom", {
               method: "POST",
               headers: { "x-idempotency-key": idempotencyKey },
@@ -276,6 +283,10 @@ export function ImportBomClient({
               robotNumber
             })
           });
+    if (!response) {
+      setLoading(false);
+      return;
+    }
     const data = (await response.json().catch(() => null)) as
       | { error?: string; batchId?: string; rows?: PreviewRow[]; summary?: ImportSummary }
       | null;
